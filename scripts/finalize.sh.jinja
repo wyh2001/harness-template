@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+print_stage() {
+  printf '\n==> %s\n' "$1"
+}
+
+require_path() {
+  local path="$1"
+  local message="$2"
+
+  if [[ ! -e "${path}" ]]; then
+    printf '%s\n' "${message}" >&2
+    exit 1
+  fi
+}
+
+cd "${REPO_ROOT}"
+
+{% if backend_stack == 'rust' -%}
+require_path "Cargo.toml" "Rust gates require Cargo.toml at the repository root."
+
+print_stage "Rust format"
+cargo fmt --all --check
+
+print_stage "Rust check"
+cargo check --workspace
+
+print_stage "Rust clippy"
+cargo clippy --workspace --all-targets -- -D warnings
+
+print_stage "Rust module docs"
+./scripts/check-rust-module-docs.sh
+
+print_stage "Rust tests"
+cargo test --workspace
+
+{% elif backend_stack == 'dotnet' -%}
+require_path "{{ dotnet_solution_path }}" ".NET gates require {{ dotnet_solution_path }}."
+
+print_stage "Backend format"
+dotnet format {{ dotnet_solution_path }} --verify-no-changes
+
+print_stage "Backend build"
+dotnet build {{ dotnet_solution_path }}
+
+print_stage "Backend tests"
+dotnet test {{ dotnet_solution_path }}
+
+{% endif -%}
+{% if frontend_stack != 'none' -%}
+require_path "{{ frontend_dir }}/package.json" "Frontend gates require {{ frontend_dir }}/package.json."
+
+print_stage "Frontend format"
+pnpm --dir {{ frontend_dir }} format:check
+
+{% if frontend_stack == 'astro' -%}
+print_stage "Frontend check"
+pnpm --dir {{ frontend_dir }} check
+
+print_stage "Frontend tests"
+pnpm --dir {{ frontend_dir }} test
+
+print_stage "Frontend e2e"
+pnpm --dir {{ frontend_dir }} test:e2e
+
+print_stage "Frontend build"
+pnpm --dir {{ frontend_dir }} build
+
+{% else -%}
+print_stage "Frontend lint"
+pnpm --dir {{ frontend_dir }} lint
+
+print_stage "Frontend build"
+pnpm --dir {{ frontend_dir }} build
+
+{% endif -%}
+{% endif -%}
+{% if include_layering_validator -%}
+print_stage "Architecture layering"
+node scripts/validate-layering.mjs
+
+{% endif -%}
+{% if include_api_contract | default(false) -%}
+print_stage "API contract"
+./scripts/check-api-contract.sh
+
+{% endif -%}
+print_stage "Markdown lint"
+./scripts/lint-md.sh
+
+print_stage "Finalize checks passed"

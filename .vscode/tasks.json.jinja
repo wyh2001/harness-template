@@ -1,0 +1,74 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: start full stack",
+      "type": "shell",
+      "command": "./scripts/dev.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "dev: check health",
+      "type": "shell",
+      "command": "./scripts/check-health.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "smoke",
+      "type": "shell",
+      "command": "./scripts/smoke.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+{% if include_api_contract | default(false) %}
+    {
+      "label": "generate api contract",
+      "type": "shell",
+      "command": "./scripts/generate-api-contract.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+{% endif %}
+    {
+      "label": "finalize",
+      "type": "shell",
+      "command": "./scripts/finalize.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": {% if backend_stack == 'rust' %}["$rustc"]{% else %}[]{% endif %},
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+# Agent Governance v0.1
+
+Status: Active
+
+## Goal
+
+Keep agent work reliable by turning repeated project expectations into local knowledge, checks, and feedback loops.
+
+This document is for changing project conventions, architecture rules, validation scripts, generated artifacts, or agent-facing docs.
+
+## 1. Knowledge Layout
+
+`AGENTS.md` is the agent-facing table of contents. It should stay short and point to durable project docs.
+
+`docs/README.md` is the reading guide. It should answer:
+
+- What should I read first?
+- Which specs define current behavior?
+- Which decisions explain historical rationale?
+- Which task docs describe repeatable maintenance work?
+
+`docs/specs/` contains current intended behavior and architecture.
+
+`docs/decisions/` contains short decision records.
+
+`docs/tasks/` contains repeatable procedures such as doc gardening and schema generation.
+
+## 2. Source-of-truth Rules
+
+- Specs describe the intended current system.
+- Decisions explain why a choice was made at a point in time.
+- Code and tests describe actual behavior.
+- Scripts encode mechanical checks.
+- Generated contracts describe committed API memory and must be reproducible.
+
+When these disagree, do not add override notes. Update the stale artifact or leave a specific follow-up.
+
+## 3. Mechanical Checks
+
+Important repository conventions should be enforced by scripts when practical.
+
+The repository harness includes:
+
+{% if backend_stack == 'rust' -%}
+- Rust formatting, workspace checks, clippy, tests, and module-level documentation checks.
+{% elif backend_stack == 'dotnet' -%}
+- .NET formatting, build, and test gates.
+{% endif -%}
+{% if frontend_stack != 'none' -%}
+- Frontend formatting, lint/check, tests when present, and build checks.
+{% endif -%}
+{% if include_api_contract | default(false) -%}
+- API contract generation and freshness checks.
+{% endif -%}
+- Markdown lint for `AGENTS.md`, README files, and `docs/**/*.md`.
+{% if include_layering_validator -%}
+- Architecture layering checks through `scripts/validate-layering.mjs`.
+{% endif -%}
+- `scripts/finalize.sh` as the check-only final gate.
+
+Future checks should be added when a rule becomes repeated, easy to forget, or important for agent legibility.
+
+## 4. Documentation Style
+
+Docs should be indexed, cross-linked, and scoped.
+
+Prefer:
+
+- short entry points.
+- stable headings.
+- explicit links.
+- current behavior over historical narrative.
+- deleting stale text over adding caveats.
+
+Avoid:
+
+- one large project manual.
+- duplicated instructions in multiple places.
+- unlinked specs.
+- rules that exist only in chat history.
+
+## 5. Code Comment Policy
+
+Comments are for agent legibility and maintenance boundaries, not for narrating code.
+
+Prefer comments for:
+
+- module or layer boundaries.
+- non-obvious invariants.
+- safety, persistence, or contract assumptions.
+- why a surprising implementation choice exists.
+
+Avoid comments that:
+
+- repeat the name or syntax of the next line.
+- explain obvious control flow.
+- duplicate current specs without adding local boundary context.
+- compensate for unclear names that should be improved instead.
+{% if backend_stack == 'rust' -%}
+Rust source files under `crates/` must start with a module-level `//!` comment. The comment should explain the module's boundary, layer, or reason to exist in one short sentence. This is enforced by `scripts/check-rust-module-docs.sh`.
+{% endif %}
+## 6. Layering Policy
+
+Layering rules should describe dependency direction and ownership, not ceremony.
+
+Before adding a new rule:
+
+1. Write the rule in `docs/specs/architecture-layering-v0.1.md`.
+2. Decide whether the rule is guidance, planned enforcement, or enforced.
+3. Add mechanical enforcement only when the failure can be explained clearly.
+4. Wire the check into `scripts/finalize.sh` when it is stable and cheap enough.
+
+Custom validation errors should say both what failed and where the code should go instead.
+
+Good failure shape:
+
+```text
+components must not call fetch directly; use feature runtime/service/repo layers
+```
+
+Avoid vague failure shape:
+
+```text
+invalid architecture
+```
+
+## 7. Schema Generation Policy
+
+Treat generated schemas and contracts as project memory.
+
+{% if include_api_contract | default(false) -%}
+When backend API shapes change:
+
+1. Update backend contract types and handlers.
+2. Run `./scripts/generate-api-contract.sh`.
+3. Review the OpenAPI and frontend type diff.
+4. Commit generated artifacts with the behavioral change.
+5. Run `./scripts/check-api-contract.sh` or `./scripts/finalize.sh`.
+
+Frontend code should import generated API types instead of copying backend DTOs by hand.
+{% else -%}
+When this project gains generated schemas, add a generation script, a freshness check, and a short task doc before relying on the generated output in feature code.
+{% endif %}
+## 8. Change Discipline
+
+When changing conventions, scripts, architecture boundaries, generated artifacts, or agent-facing docs:
+
+1. Read `docs/README.md`.
+2. Read this spec.
+3. Update the relevant spec or decision.
+4. Add or update mechanical checks when the convention is enforceable.
+5. Run the smallest relevant checks, and run `./scripts/finalize.sh` when implementation files changed.

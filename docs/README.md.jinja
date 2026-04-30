@@ -1,0 +1,35 @@
+# Docs Reading Guide
+
+Start here before reading longer docs.
+
+{{ project_name }} uses progressive disclosure for repository knowledge: this file is the entry point, specs describe current intended behavior, decisions explain why major choices were made, and tasks describe repeatable maintenance workflows.
+
+For each project session, read these docs first:
+
+1. [{{ main_spec_title }}](./specs/{{ main_spec_slug }}-v0.1.md) - Product scope, target user, current behavior, non-goals, and validation strategy.
+2. [Architecture Layering v0.1](./specs/architecture-layering-v0.1.md) - Dependency direction, ownership boundaries, and current enforcement.
+3. [Agent Governance v0.1](./specs/agent-governance-v0.1.md) - Repository harness, comment policy, generated artifacts, and validation principles.
+
+When changing project conventions, validation scripts, architecture rules, generated schemas, or agent-facing docs, read [Agent Governance v0.1](./specs/agent-governance-v0.1.md).
+
+When changing specs, decisions, generated contracts, or code, keep the affected artifacts aligned in the same change. If that is not feasible, leave an explicit follow-up.
+
+When checking whether docs, generated contracts, scripts, and code still align, use [Alignment Check Task](./tasks/alignment-check.md).
+
+When backend API shapes change, use [Schema Generation Task](./tasks/schema-generation.md).
+
+## Specs
+
+- [{{ main_spec_title }}](./specs/{{ main_spec_slug }}-v0.1.md) - Product scope and intended current behavior.
+- [Architecture Layering v0.1](./specs/architecture-layering-v0.1.md) - Layer ownership, dependency direction, and enforcement progress.
+- [Agent Governance v0.1](./specs/agent-governance-v0.1.md) - Repository harness, comment policy, generated artifacts, and validation principles.
+
+## Decisions
+
+- [0001. Adopt Agent-legible Repository Harness](./decisions/0001-adopt-agent-legible-repository-harness.md)
+- [0002. Use Generated API Contracts](./decisions/0002-use-generated-api-contracts.md)
+
+## Tasks
+
+- [Alignment Check Task](./tasks/alignment-check.md) - Checklist for detecting and fixing drift between docs, generated contracts, decisions, code, and checks.
+- [Schema Generation Task](./tasks/schema-generation.md) - Workflow for regenerating OpenAPI and frontend API types.

@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+{% if include_api_contract | default(false) -%}
+{% if backend_stack == 'rust' -%}
+OPENAPI_CONTRACT="${REPO_ROOT}/{{ openapi_contract_path }}"
+{% elif backend_stack == 'dotnet' -%}
+BACKEND_PROJECT="${REPO_ROOT}/{{ dotnet_api_project_path }}"
+OPENAPI_BUILD_OUTPUT="${REPO_ROOT}/{{ dotnet_openapi_build_output }}"
+OPENAPI_CONTRACT="${REPO_ROOT}/{{ dotnet_openapi_contract_path }}"
+{% endif -%}
+FRONTEND_SCHEMA="${REPO_ROOT}/{{ frontend_schema_path }}"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/{{ project_slug }}-schema.XXXXXX")"
+TEMP_RAW_OPENAPI="${TEMP_DIR}/openapi.raw.json"
+TEMP_OPENAPI="${TEMP_DIR}/openapi.json"
+TEMP_SCHEMA="${TEMP_DIR}/schema.d.ts"
+
+openapi_typescript() {
+  if command -v openapi-typescript >/dev/null 2>&1; then
+    openapi-typescript "$@"
+    return
+  fi
+
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm dlx openapi-typescript "$@"
+    return
+  fi
+
+  if command -v npx >/dev/null 2>&1; then
+    npx -y openapi-typescript "$@"
+    return
+  fi
+
+  printf 'openapi-typescript is required. Install it, or install Node.js with pnpm/npx available.\n' >&2
+  exit 1
+}
+
+cleanup() {
+  rm -rf "${TEMP_DIR}"
+}
+
+format_schema() {
+  local schema_path="$1"
+
+  if command -v pnpm >/dev/null 2>&1 && [[ -f "${REPO_ROOT}/{{ frontend_dir }}/.prettierrc" ]] && pnpm --dir "${REPO_ROOT}/{{ frontend_dir }}" exec prettier --version >/dev/null 2>&1; then
+    pnpm --dir "${REPO_ROOT}/{{ frontend_dir }}" exec prettier --write \
+      --config "${REPO_ROOT}/{{ frontend_dir }}/.prettierrc" \
+      --ignore-path /dev/null \
+      "${schema_path}" >/dev/null
+  fi
+}
+
+require_generated_file() {
+  local path="$1"
+  local label="$2"
+
+  if [[ ! -f "${path}" ]]; then
+    printf 'Missing %s: %s\n' "${label}" "${path}" >&2
+    printf 'Run ./scripts/generate-api-contract.sh\n' >&2
+    exit 1
+  fi
+}
+
+trap cleanup EXIT
+
+require_generated_file "${OPENAPI_CONTRACT}" "generated OpenAPI contract"
+require_generated_file "${FRONTEND_SCHEMA}" "generated frontend API types"
+
+{% if backend_stack == 'rust' -%}
+printf 'Checking backend OpenAPI document\n'
+cargo run -p {{ rust_api_package }} --bin {{ rust_openapi_bin }} -- "${TEMP_RAW_OPENAPI}" >/dev/null
+node "${REPO_ROOT}/scripts/normalize-openapi.mjs" "${TEMP_RAW_OPENAPI}" "${TEMP_OPENAPI}"
+
+{% elif backend_stack == 'dotnet' -%}
+printf 'Checking backend OpenAPI document\n'
+ASPNETCORE_ENVIRONMENT=Production dotnet build "${BACKEND_PROJECT}" >/dev/null
+node "${REPO_ROOT}/scripts/normalize-openapi.mjs" "${OPENAPI_BUILD_OUTPUT}" "${TEMP_OPENAPI}"
+
+{% endif -%}
+if ! cmp --silent "${TEMP_OPENAPI}" "${OPENAPI_CONTRACT}"; then
+  printf 'OpenAPI contract is stale. Run ./scripts/generate-api-contract.sh\n' >&2
+  diff -u "${OPENAPI_CONTRACT}" "${TEMP_OPENAPI}" >&2 || true
+  exit 1
+fi
+
+printf 'Checking frontend API types\n'
+openapi_typescript "${TEMP_OPENAPI}" -o "${TEMP_SCHEMA}" >/dev/null
+format_schema "${TEMP_SCHEMA}"
+
+if ! cmp --silent "${TEMP_SCHEMA}" "${FRONTEND_SCHEMA}"; then
+  printf 'Frontend API types are stale. Run ./scripts/generate-api-contract.sh\n' >&2
+  diff -u "${FRONTEND_SCHEMA}" "${TEMP_SCHEMA}" >&2 || true
+  exit 1
+fi
+
+printf 'API contract checks passed.\n'
+{% else -%}
+printf 'API contract checks are disabled for this project.\n'
+{% endif %}

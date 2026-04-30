@@ -1,0 +1,133 @@
+# Agent Guide
+
+## Read First
+
+Before project work, read:
+
+1. `docs/README.md`
+2. The relevant spec or decision linked from `docs/README.md`
+
+Use this file as a table of contents, not as a full instruction manual. Durable project knowledge should live in `docs/`.
+
+## Project Structure
+
+{% if backend_stack == 'rust' -%}
+- `crates/` - Rust workspace crates, organized by layer and domain.
+{% elif backend_stack == 'dotnet' -%}
+- `backend/` - .NET API solution and tests.
+{% endif -%}
+{% if frontend_stack != 'none' -%}
+- `{{ frontend_dir }}/` - {% if frontend_stack == 'astro' %}Astro frontend{% else %}Vite frontend{% endif %}.
+{% endif -%}
+- `docs/` - Product specs, technical specs, decisions, and repeatable tasks.
+- `scripts/` - Local maintenance and validation scripts.
+{% if include_api_contract | default(false) -%}
+- `{% if backend_stack == 'dotnet' %}{{ dotnet_openapi_contract_path }}{% else %}{{ openapi_contract_path }}{% endif %}` - Committed OpenAPI contract.
+- `{{ frontend_schema_path }}` - Generated frontend API schema types.
+{% endif %}
+## Scripts
+
+Run write-mode formatting:
+
+```bash
+./scripts/format.sh
+```
+
+Run final validation:
+
+```bash
+./scripts/finalize.sh
+```
+
+`finalize.sh` is check-only and should not modify files. Run it before considering implementation work complete.
+
+{% if include_layering_validator -%}
+Architecture layering is enforced by `scripts/validate-layering.mjs` as part of `finalize.sh`. Update `docs/specs/architecture-layering-v0.1.md` before changing layer rules.
+
+{% endif -%}
+{% if include_api_contract | default(false) -%}
+Regenerate backend OpenAPI and frontend API types:
+
+```bash
+./scripts/generate-api-contract.sh
+```
+
+`finalize.sh` checks that committed generated contracts are current. Do not hand-write frontend DTOs for backend API responses.
+
+Before changing project conventions, validation scripts, architecture rules, generated schemas, or agent-facing docs, read `docs/specs/agent-governance-v0.1.md`.
+
+{% endif -%}
+For documentation, contract, and code alignment checks, use `docs/tasks/alignment-check.md`.
+
+Run the local stack:
+
+```bash
+./scripts/dev.sh
+```
+
+Check a running local stack:
+
+```bash
+./scripts/check-health.sh
+```
+
+Run a temporary startup smoke check:
+
+```bash
+./scripts/smoke.sh
+```
+
+`smoke.sh` starts the configured local services, checks configured endpoints, and kills only the PIDs it started. Run it after changes to startup, routing, environment wiring, or cross-app integration.
+
+## Development Commands
+
+{% if backend_stack == 'rust' -%}
+Backend:
+
+```bash
+cargo run -p {{ rust_api_package }}
+cargo check --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+./scripts/check-rust-module-docs.sh
+cargo test --workspace
+```
+
+{% elif backend_stack == 'dotnet' -%}
+Backend:
+
+```bash
+dotnet run --project {{ dotnet_api_project_path }}
+dotnet build {{ dotnet_solution_path }}
+dotnet test {{ dotnet_solution_path }}
+```
+
+{% endif -%}
+{% if frontend_stack != 'none' -%}
+Frontend:
+
+```bash
+pnpm --dir {{ frontend_dir }} dev
+pnpm --dir {{ frontend_dir }} build
+{% if frontend_stack == 'astro' -%}
+pnpm --dir {{ frontend_dir }} check
+pnpm --dir {{ frontend_dir }} test
+{% else -%}
+pnpm --dir {{ frontend_dir }} lint
+pnpm --dir {{ frontend_dir }} format:check
+{% endif -%}
+```
+
+{% endif -%}
+Markdown:
+
+```bash
+./scripts/lint-md.sh
+```
+
+## Repository Harness Principles
+
+- Keep repository-local docs as the system of record.
+- Prefer small indexed docs over one large instruction file.
+- Add mechanical checks when a convention becomes important.
+- Keep generated contracts current and committed when they are part of the workflow.
+- When docs and code drift, update the stale artifact in the same change when feasible.

@@ -1,0 +1,27 @@
+# 0002. Use Generated API Contracts
+
+Status: {% if include_api_contract | default(false) %}Accepted{% else %}Deferred{% endif %}
+
+## Context
+
+Frontend/backend API drift is easy to miss when DTOs are copied by hand. A generated contract gives agents and humans a concrete artifact to compare.
+
+## Decision
+
+{% if include_api_contract | default(false) -%}
+Generate backend OpenAPI and frontend API TypeScript types with `./scripts/generate-api-contract.sh`.
+
+`./scripts/finalize.sh` runs `./scripts/check-api-contract.sh` to confirm committed generated artifacts are current.
+{% else -%}
+Generated API contracts are not enabled yet for this project shape. If a backend/frontend API boundary becomes important, add generation and freshness scripts before relying on handwritten DTO duplication.
+{% endif %}
+## Consequences
+
+{% if include_api_contract | default(false) -%}
+- Backend API changes must include generated contract diffs.
+- Frontend code should import generated API types instead of hand-writing backend response shapes.
+- Contract freshness failures should explain how to regenerate the artifacts.
+{% else -%}
+- The project should not treat any generated schema as authoritative until a generation script and freshness check exist.
+- This decision should be updated when generated contracts are enabled.
+{% endif -%}

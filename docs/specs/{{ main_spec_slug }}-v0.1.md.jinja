@@ -1,0 +1,43 @@
+# {{ main_spec_title }}
+
+Status: Draft
+
+## 1. Purpose
+
+{{ project_summary }}
+
+This spec is the current product and implementation intent. Keep it short enough to scan before work, and split deeper topics into focused specs when this document becomes too broad.
+
+## 2. Target User
+
+TODO: Describe the primary user and the workflow this project should make easier.
+
+## 3. Current Scope
+
+TODO: List the behavior that is in scope for the current version.
+
+## 4. Non-goals
+
+TODO: List tempting directions that are explicitly out of scope for now.
+
+## 5. Data And Contracts
+
+{% if include_api_contract | default(false) -%}
+Backend API shapes are generated into OpenAPI and frontend TypeScript types. The committed generated artifacts are part of the repository memory:
+
+- `{% if backend_stack == 'dotnet' %}{{ dotnet_openapi_contract_path }}{% else %}{{ openapi_contract_path }}{% endif %}`
+- `{{ frontend_schema_path }}`
+
+Do not hand-write frontend DTOs that duplicate backend responses. Update backend contracts, run `./scripts/generate-api-contract.sh`, and commit the generated diff.
+{% else -%}
+TODO: Define which schemas, DTOs, migrations, or generated artifacts are authoritative.
+{% endif %}
+## 6. Validation Strategy
+
+Use `./scripts/finalize.sh` as the final check-only gate for implementation work.
+
+Run `./scripts/smoke.sh` after changes to startup, routing, environment wiring, or cross-service integration.
+
+## 7. Open Questions
+
+- TODO: Capture unresolved product or architecture questions with enough context to answer later.

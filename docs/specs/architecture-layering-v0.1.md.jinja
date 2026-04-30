@@ -1,0 +1,182 @@
+# Architecture Layering v0.1
+
+Status: Active
+
+Related decision: [0001. Adopt Agent-legible Repository Harness](../decisions/0001-adopt-agent-legible-repository-harness.md)
+
+## 1. Purpose
+
+{{ project_name }} should stay legible as it grows. The main risk is not missing abstraction on day one; it is letting domain rules, API details, persistence, generated contracts, runtime state, and UI behavior blur together until small changes become unsafe.
+
+Layering rules describe dependency direction and ownership. They are not a demand for ceremony before the project needs it.
+
+{% if backend_stack == 'rust' -%}
+## 2. Rust Backend Layers
+
+Target direction:
+
+```text
+Domain model -> Application use cases -> Adapters -> Interface/runtime
+```
+
+Suggested workspace shape:
+
+```text
+crates/
+  core/   # pure domain types and state transitions
+  app/    # use cases and port traits
+  db/     # persistence adapters
+  api/    # HTTP boundary, OpenAPI, runtime wiring
+```
+
+Rules:
+
+- `core` must not depend on HTTP, SQL, provider SDKs, environment variables, or generated frontend types.
+- `app` coordinates use cases through traits and should not depend on Axum request/response types or SQL query code.
+- adapter crates may depend inward on domain/application traits.
+- route handlers should translate HTTP to application calls and map results back to HTTP.
+
+Rust source files under `crates/` should start with a short `//!` module boundary comment.
+{% elif backend_stack == 'dotnet' -%}
+## 2. .NET Backend Layers
+
+Target feature shape:
+
+```text
+backend/
+  <ApiProject>/
+    Contracts/
+    Domain/
+    Features/
+      Items/
+        ItemsEndpoints.cs
+        ItemsService.cs
+        ItemsQueries.cs
+        ItemsCommands.cs
+        ItemsContracts.cs
+    Infrastructure/
+    Common/
+```
+
+Dependency direction:
+
+```text
+Contracts/Domain -> Queries/Commands -> Services -> Endpoints
+```
+
+Rules:
+
+- endpoints own routing, auth policy, binding, response metadata, and result mapping.
+- services own business workflows and transaction boundaries.
+- queries/commands own database access.
+- infrastructure owns provider wiring, persistence, configuration, and external systems.
+- endpoint files must not use `DbContext` or save changes directly.
+- feature code should use named providers for clock, current user/request context, environment, and logging.
+{% endif -%}
+{% if frontend_stack != 'none' %}
+## 3. Frontend Layers
+
+Target structure:
+
+```text
+{{ frontend_dir }}/src/
+  app/
+  shared/
+    api/
+    ui/
+    lib/
+  features/
+    <feature>/
+      types.ts
+      config.ts
+      repo.ts
+      service.ts
+      runtime{% if frontend_stack == 'astro' %}.svelte{% endif %}.ts
+      components/
+  pages/
+```
+
+Dependency direction:
+
+```text
+types -> config -> repo -> service -> runtime -> components/pages
+```
+
+Layer responsibilities:
+
+- `types.ts`: DTOs, value types, parse/validation schemas when needed.
+- `config.ts`: feature constants, labels, allowed sort/filter modes.
+- `repo.ts`: backend API calls for the feature, using `shared/api`.
+- `service.ts`: pure business/view transformation logic.
+- `runtime*.ts`: client-side state, effects, loading/error orchestration.
+- `components/`: UI rendering and user events.
+- `pages/`: route composition.
+
+Frontend components should not call `fetch` directly. Use feature repo/service/runtime boundaries.
+{% endif %}
+## 4. Generated Contracts
+
+{% if include_api_contract | default(false) -%}
+Backend API DTOs are generated into OpenAPI and frontend API types.
+
+Committed generated artifacts:
+
+- `{% if backend_stack == 'dotnet' %}{{ dotnet_openapi_contract_path }}{% else %}{{ openapi_contract_path }}{% endif %}`
+- `{{ frontend_schema_path }}`
+
+Frontend feature code should import generated API types instead of copying backend response shapes by hand.
+{% else -%}
+Generated contracts are not enabled yet. If API schema generation is introduced, add both a generation script and a freshness check before feature code depends on generated output.
+{% endif %}
+## 5. Current Enforcement
+
+The current validator is intentionally narrow. It should block shortcuts without forcing a broad rewrite before stable feature domains exist.
+
+{% if include_layering_validator -%}
+Enforced now:
+
+{% if backend_stack == 'rust' -%}
+- Rust `crates/core` files must not import HTTP, SQL, provider SDK, or environment/runtime concerns.
+- Rust `crates/app` files must not import HTTP boundary or concrete database concerns.
+- Rust adapter crates must not import API/runtime crates.
+{% elif backend_stack == 'dotnet' -%}
+- Backend `*Endpoints.cs` files must not use `DbContext`, Entity Framework imports, or `SaveChanges`.
+- Backend endpoint files must include stable operation names, tags, and response metadata.
+- Mutating non-development endpoints must declare explicit auth decisions.
+- Feature code must use provider boundaries for time, request context, environment, and console output.
+{% endif -%}
+{% if frontend_stack != 'none' -%}
+- Frontend components must not call `fetch` directly.
+- Frontend UI/runtime files must not import `shared/api` directly.
+- Frontend feature repo/runtime/component files must keep dependency direction predictable.
+{% endif -%}
+{% if include_api_contract | default(false) -%}
+- Committed backend OpenAPI and frontend API types must match the current backend.
+{% endif %}
+Not enforced yet:
+
+- Complete feature folder naming.
+- Mandatory file shape for every feature.
+- File size limits.
+- Every provider boundary that has not appeared in production code yet.
+{% else -%}
+No mechanical layering validator is enabled yet. Add one when a convention becomes repeated and cheap to verify.
+{% endif %}
+## 6. Runtime Feedback Loop
+
+Local runtime checks are separate from `finalize.sh` because they start servers and require free ports.
+
+- `scripts/dev.sh`: starts the configured local stack for manual or agent-driven inspection.
+- `scripts/check-health.sh`: checks an already-running local stack.
+- `scripts/smoke.sh`: starts configured services, checks health/home endpoints, then shuts down only the PIDs it started.
+
+Run `scripts/smoke.sh` after changes to startup, routing, environment wiring, or cross-service integration.
+
+## 7. How To Extend
+
+When adding a new architectural rule:
+
+1. Update this spec.
+2. Add or update validator coverage in `scripts/validate-layering.mjs`.
+3. Make validation failures actionable.
+4. Run `./scripts/finalize.sh`.

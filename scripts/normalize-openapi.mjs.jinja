@@ -1,0 +1,29 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+
+const [, , inputPath, outputPath] = process.argv;
+
+if (!inputPath || !outputPath) {
+  console.error('Usage: node scripts/normalize-openapi.mjs <input> <output>');
+  process.exit(1);
+}
+
+function sortJson(value) {
+  if (Array.isArray(value)) {
+    return value.map(sortJson);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, sortJson(value[key])])
+    );
+  }
+
+  return value;
+}
+
+const document = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
+fs.writeFileSync(outputPath, `${JSON.stringify(sortJson(document), null, 2)}\n`);

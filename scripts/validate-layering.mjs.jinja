@@ -1,0 +1,329 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+
+const workspaceRoot = process.cwd();
+const backendStack = '{{ backend_stack }}';
+const frontendStack = '{{ frontend_stack }}';
+const frontendDir = '{{ frontend_dir | default("") }}';
+const findings = [];
+const featureValidationCache = new Map();
+
+function toRepoPath(filePath) {
+  return path.relative(workspaceRoot, filePath).replaceAll(path.sep, '/');
+}
+
+function walkFiles(dirPath, predicate) {
+  const files = [];
+  if (!fs.existsSync(dirPath)) {
+    return files;
+  }
+
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      if (['.git', 'bin', 'obj', 'node_modules', 'target', 'dist', 'build'].includes(entry.name)) {
+        continue;
+      }
+
+      files.push(...walkFiles(fullPath, predicate));
+      continue;
+    }
+
+    if (!predicate || predicate(fullPath)) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function readFile(filePath) {
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+function addFinding(filePath, message) {
+  findings.push(`${toRepoPath(filePath)}: ${message}`);
+}
+
+function collectImportSpecifiers(content) {
+  const imports = [];
+  const fromPattern = /\b(?:import|export)\s+[\s\S]*?\s+from\s+['"]([^'"]+)['"]/g;
+  const barePattern = /\bimport\s+['"]([^'"]+)['"]/g;
+
+  for (const match of content.matchAll(fromPattern)) {
+    imports.push(match[1]);
+  }
+
+  for (const match of content.matchAll(barePattern)) {
+    imports.push(match[1]);
+  }
+
+  return imports;
+}
+
+function resolveRelativeImport(sourceFilePath, specifier) {
+  if (!specifier.startsWith('.')) {
+    return null;
+  }
+
+  const basePath = path.resolve(path.dirname(sourceFilePath), specifier);
+  const candidates = [
+    basePath,
+    `${basePath}.ts`,
+    `${basePath}.js`,
+    `${basePath}.svelte`,
+    `${basePath}.astro`,
+    `${basePath}.svelte.ts`,
+    path.join(basePath, 'index.ts'),
+    path.join(basePath, 'index.js'),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+function validateRustLayers() {
+  const rules = [
+    {
+      dir: 'crates/core',
+      patterns: [
+        [/\baxum\b/, 'core must not depend on HTTP framework types'],
+        [/\bsqlx\b/, 'core must not depend on SQL/database details'],
+        [/\breqwest\b/, 'core must not depend on HTTP clients or provider SDK transport'],
+        [/\bstd::env\b|\bdotenvy\b/, 'core must not read process environment'],
+      ],
+    },
+    {
+      dir: 'crates/app',
+      patterns: [
+        [/\baxum\b/, 'app must not depend on HTTP boundary types'],
+        [/\bsqlx\b/, 'app must not depend on concrete SQL/database code; use repository traits'],
+        [/\breqwest\b/, 'app must not depend on provider transport; use provider traits'],
+      ],
+    },
+    {
+      dir: 'crates/db',
+      patterns: [[/\b{{ project_slug | replace('-', '_') }}_api\b/, 'db adapter must not depend on the API/runtime crate']],
+    },
+    {
+      dir: 'crates/llm',
+      patterns: [[/\b{{ project_slug | replace('-', '_') }}_api\b/, 'llm adapter must not depend on the API/runtime crate']],
+    },
+  ];
+
+  for (const rule of rules) {
+    const dirPath = path.join(workspaceRoot, rule.dir);
+    for (const filePath of walkFiles(dirPath, (candidate) => candidate.endsWith('.rs'))) {
+      const content = readFile(filePath);
+      for (const [pattern, message] of rule.patterns) {
+        if (pattern.test(content)) {
+          addFinding(filePath, message);
+        }
+      }
+    }
+  }
+}
+
+function collectBackendEndpointSections(content) {
+  const endpointPattern = /\b\w+\.Map(Get|Post|Put|Patch|Delete)\s*\(/g;
+  const matches = [...content.matchAll(endpointPattern)];
+
+  return matches.map((match, index) => {
+    const nextMatch = matches[index + 1];
+    const returnIndex = content.indexOf('return routes;', match.index);
+    const endIndex = nextMatch?.index ?? (returnIndex === -1 ? content.length : returnIndex);
+
+    return {
+      method: match[1],
+      content: content.slice(match.index, endIndex),
+    };
+  });
+}
+
+function featureHasRequestValidation(filePath) {
+  const featureDir = path.dirname(filePath);
+  if (featureValidationCache.has(featureDir)) {
+    return featureValidationCache.get(featureDir);
+  }
+
+  const featureContent = walkFiles(featureDir, (candidate) => candidate.endsWith('.cs'))
+    .map(readFile)
+    .join('\n');
+  const hasValidation = /(?:\b[A-Z]\w*ValidationException\b|\bValidate[A-Za-z0-9_]*\s*\(|\bIValidator<|\b[A-Z]\w*Validator\b)/.test(featureContent);
+
+  featureValidationCache.set(featureDir, hasValidation);
+  return hasValidation;
+}
+
+function validateBackendEndpointMetadata(filePath, content) {
+  const isHealthEndpointFile = toRepoPath(filePath).includes('/Features/Health/');
+  const fileHasTags = /\.WithTags\s*\(/.test(content);
+
+  for (const endpoint of collectBackendEndpointSections(content)) {
+    if (!/\.WithName\s*\(/.test(endpoint.content)) {
+      addFinding(filePath, 'endpoints must define stable operation names with .WithName(...)');
+    }
+
+    if (!fileHasTags && !/\.WithTags\s*\(/.test(endpoint.content)) {
+      addFinding(filePath, 'endpoints must define OpenAPI tags with .WithTags(...) or a tagged route group');
+    }
+
+    if (!isHealthEndpointFile && !/\.Produces(?:<|\s*\()/.test(endpoint.content)) {
+      addFinding(filePath, 'non-health endpoints must declare response metadata with .Produces<T>() or .Produces(...)');
+    }
+
+    const isMutatingEndpoint = ['Post', 'Put', 'Patch', 'Delete'].includes(endpoint.method);
+    const isDevelopmentEndpoint = toRepoPath(filePath).includes('/Features/Development/');
+    const hasExplicitAuthDecision =
+      /\.RequireAuthorization\s*\(/.test(endpoint.content) ||
+      /\.AllowAnonymous\s*\(/.test(endpoint.content);
+
+    if (isMutatingEndpoint && !isDevelopmentEndpoint && !hasExplicitAuthDecision) {
+      addFinding(filePath, 'mutating non-development endpoints must declare .RequireAuthorization(...) or .AllowAnonymous() explicitly');
+    }
+
+    const hasRequestContract = /\b[A-Z]\w*Request\b/.test(endpoint.content);
+    if (['Post', 'Put', 'Patch'].includes(endpoint.method) && hasRequestContract && !/\.Accepts<[^>]+>/.test(endpoint.content)) {
+      addFinding(filePath, 'request-body endpoints must declare .Accepts<T>("application/json") for OpenAPI generation');
+    }
+
+    if (['Post', 'Put', 'Patch'].includes(endpoint.method) && hasRequestContract && !/\.Produces\s*\(\s*StatusCodes\.Status400BadRequest/.test(endpoint.content)) {
+      addFinding(filePath, 'request-body endpoints must declare .Produces(StatusCodes.Status400BadRequest) for validation failures');
+    }
+
+    if (['Post', 'Put', 'Patch'].includes(endpoint.method) && hasRequestContract && !featureHasRequestValidation(filePath)) {
+      addFinding(filePath, 'request-body endpoints must have an explicit validation path in the feature folder; add a Validate... method, *ValidationException, or *Validator');
+    }
+  }
+}
+
+function validateDotnetBackend() {
+  const apiDir = path.join(workspaceRoot, path.dirname('{{ dotnet_api_project_path | default("backend/App.Api/App.Api.csproj") }}'));
+  const endpointFiles = walkFiles(apiDir, (filePath) => filePath.endsWith('Endpoints.cs'));
+  const endpointForbiddenPatterns = [
+    [/\bApplicationDbContext\b/, 'endpoints must not depend on ApplicationDbContext directly; use feature services/commands'],
+    [/\bDbContext\b/, 'endpoints must not depend on DbContext directly; use feature services/commands'],
+    [/\bMicrosoft\.EntityFrameworkCore\b/, 'endpoints must not import Entity Framework Core directly'],
+    [/\bSaveChanges(?:Async)?\s*\(/, 'endpoints must not save database changes directly; keep transactions in services/commands'],
+  ];
+
+  for (const filePath of endpointFiles) {
+    const content = readFile(filePath);
+    for (const [pattern, message] of endpointForbiddenPatterns) {
+      if (pattern.test(content)) {
+        addFinding(filePath, message);
+      }
+    }
+
+    validateBackendEndpointMetadata(filePath, content);
+  }
+
+  const featuresDir = path.join(apiDir, 'Features');
+  const featureFiles = walkFiles(featuresDir, (filePath) => filePath.endsWith('.cs'));
+  const providerForbiddenPatterns = [
+    [/\bDateTime\.UtcNow\b/, 'feature code must not read DateTime.UtcNow directly; inject IClock'],
+    [/\bDateTime\.Now\b/, 'feature code must not read DateTime.Now directly; inject IClock'],
+    [/\bDateTimeOffset\.(?:UtcNow|Now)\b/, 'feature code must not read DateTimeOffset.Now/UtcNow directly; inject IClock'],
+    [/\bI?HttpContext(?:Accessor)?\b/, 'feature code must not access HttpContext directly; use ICurrentUser or another explicit provider'],
+    [/\bEnvironment\.GetEnvironmentVariable\s*\(/, 'feature code must not read environment variables directly; use configuration or an explicit provider'],
+    [/\bConsole\.(?:Write(?:Line)?|Error|Out)\b/, 'feature code must not write to Console directly; use ILogger<T>'],
+  ];
+
+  for (const filePath of featureFiles) {
+    const content = readFile(filePath);
+    for (const [pattern, message] of providerForbiddenPatterns) {
+      if (pattern.test(content)) {
+        addFinding(filePath, message);
+      }
+    }
+  }
+}
+
+function targetsSharedApi(sourceFilePath, specifier) {
+  if (specifier === 'shared/api' || specifier.includes('/shared/api')) {
+    return true;
+  }
+
+  const resolved = resolveRelativeImport(sourceFilePath, specifier);
+  return resolved ? toRepoPath(resolved).startsWith(`${frontendDir}/src/shared/api/`) : false;
+}
+
+function importedRepoPath(sourceFilePath, specifier) {
+  if (!specifier.startsWith('.')) {
+    return specifier;
+  }
+
+  const resolved = resolveRelativeImport(sourceFilePath, specifier);
+  return resolved ? toRepoPath(resolved) : specifier;
+}
+
+function isUiOrRuntimeFile(repoPath) {
+  return (
+    repoPath.startsWith(`${frontendDir}/src/components/`) ||
+    repoPath.startsWith(`${frontendDir}/src/layouts/`) ||
+    repoPath.startsWith(`${frontendDir}/src/pages/`) ||
+    repoPath.includes('/components/') ||
+    /\/runtime(?:\.svelte)?\.(ts|js)$/.test(repoPath)
+  );
+}
+
+function validateFrontendLayers() {
+  if (frontendStack === 'none') {
+    return;
+  }
+
+  const srcDir = path.join(workspaceRoot, frontendDir, 'src');
+  const sourceFiles = walkFiles(srcDir, (filePath) => /\.(astro|svelte|ts|js)$/.test(filePath));
+
+  for (const filePath of sourceFiles) {
+    const repoPath = toRepoPath(filePath);
+    const content = readFile(filePath);
+    const imports = collectImportSpecifiers(content);
+
+    if ((repoPath.includes('/components/') || repoPath.startsWith(`${frontendDir}/src/pages/`)) && /\bfetch\s*\(/.test(content)) {
+      addFinding(filePath, 'components and pages must not call fetch directly; use feature runtime/service/repo layers');
+    }
+
+    if (isUiOrRuntimeFile(repoPath) && imports.some((specifier) => targetsSharedApi(filePath, specifier))) {
+      addFinding(filePath, 'UI/runtime files must not import shared/api directly; route calls through feature repo/service boundaries');
+    }
+
+    const importedPaths = imports.map((specifier) => importedRepoPath(filePath, specifier));
+    const isFeatureRepo = /\/features\/[^/]+\/repo\.(ts|js)$/.test(repoPath);
+    const isFeatureRuntime = /\/features\/[^/]+\/runtime(?:\.svelte)?\.(ts|js)$/.test(repoPath);
+    const isFeatureComponent = repoPath.includes('/features/') && repoPath.includes('/components/');
+
+    if (isFeatureRepo && importedPaths.some((specifier) => /\/runtime(?:\.svelte)?\.(ts|js)$/.test(specifier) || specifier.includes('/components/'))) {
+      addFinding(filePath, 'feature repo files must not import runtime or component files');
+    }
+
+    if (isFeatureRuntime && importedPaths.some((specifier) => /\/repo\.(ts|js)$/.test(specifier) || specifier.includes('/components/'))) {
+      addFinding(filePath, 'feature runtime files must not import repo or component files; depend on service/config/types instead');
+    }
+
+    if (isFeatureComponent && importedPaths.some((specifier) => /\/repo\.(ts|js)$/.test(specifier))) {
+      addFinding(filePath, 'feature components must not import repo files directly; use runtime/service boundaries');
+    }
+  }
+}
+
+if (backendStack === 'rust') {
+  validateRustLayers();
+}
+
+if (backendStack === 'dotnet') {
+  validateDotnetBackend();
+}
+
+validateFrontendLayers();
+
+if (findings.length > 0) {
+  console.error('Architecture layering violations:');
+  for (const finding of findings) {
+    console.error(`  ${finding}`);
+  }
+  process.exit(1);
+}
+
+console.log('Architecture layering checks passed.');

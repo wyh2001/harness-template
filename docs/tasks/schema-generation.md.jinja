@@ -1,0 +1,37 @@
+# Schema Generation Task
+
+## Goal
+
+Keep generated schema artifacts reproducible and aligned with source code.
+
+{% if include_api_contract | default(false) -%}
+This project commits:
+
+- `{% if backend_stack == 'dotnet' %}{{ dotnet_openapi_contract_path }}{% else %}{{ openapi_contract_path }}{% endif %}`
+- `{{ frontend_schema_path }}`
+{% else -%}
+Generated schema checks are not enabled yet. Use this task as the checklist to add them when the project needs generated artifacts.
+{% endif %}
+## Checklist
+
+1. Change the source contract first: backend DTOs, endpoint metadata, validation, or schema source files.
+2. Run `./scripts/generate-api-contract.sh`.
+3. Review generated diffs for accidental breaking changes.
+4. Update affected docs or decisions when the public API meaning changed.
+5. Run `./scripts/check-api-contract.sh` or `./scripts/finalize.sh`.
+
+## Rules
+
+- Do not hand-edit generated files.
+- Do not copy backend DTOs into frontend feature code by hand.
+- Keep generation deterministic. Sort or normalize output when tools produce unstable key ordering.
+- Freshness failures should say which command regenerates the artifact.
+
+## Output
+
+Report:
+
+- source contract files changed
+- generated files changed
+- docs updated, if any
+- checks run

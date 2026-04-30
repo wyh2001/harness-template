@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+{% if backend_stack != 'none' -%}
+API_BASE_URL="${API_BASE_URL:-http://{{ api_host }}:{{ api_port }}}"
+{% endif -%}
+{% if frontend_stack != 'none' -%}
+FRONTEND_BASE_URL="${FRONTEND_BASE_URL:-http://{{ frontend_host }}:{{ frontend_port }}}"
+{% endif %}
+
+check_url() {
+  local label="$1"
+  local url="$2"
+  local expected="$3"
+
+  printf 'Checking %s: %s\n' "${label}" "${url}"
+
+  if ! curl --fail --silent --show-error "${url}" | grep --quiet "${expected}"; then
+    printf 'Health check failed for %s. Expected response to contain: %s\n' "${label}" "${expected}" >&2
+    return 1
+  fi
+}
+
+{% if backend_stack != 'none' -%}
+check_url "API health" "${API_BASE_URL}{{ api_health_path }}" "{{ api_health_text }}"
+{% endif -%}
+{% if frontend_stack != 'none' -%}
+check_url "Frontend home" "${FRONTEND_BASE_URL}/" "{{ frontend_health_text }}"
+{% endif %}
+
+printf 'Runtime health checks passed.\n'

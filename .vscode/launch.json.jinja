@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dev: start full stack",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "./scripts/dev.sh",
+      "cwd": "${workspaceFolder}"{% if frontend_stack != 'none' %},
+      "serverReadyAction": {
+        "pattern": "Preview: (http://\\S+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }{% endif %}
+    },
+    {
+      "name": "Dev: smoke runtime",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "./scripts/smoke.sh",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+{% if include_api_contract | default(false) -%}
+{% if backend_stack == 'rust' -%}
+OPENAPI_CONTRACT="${REPO_ROOT}/{{ openapi_contract_path }}"
+{% elif backend_stack == 'dotnet' -%}
+BACKEND_PROJECT="${REPO_ROOT}/{{ dotnet_api_project_path }}"
+OPENAPI_BUILD_OUTPUT="${REPO_ROOT}/{{ dotnet_openapi_build_output }}"
+OPENAPI_CONTRACT="${REPO_ROOT}/{{ dotnet_openapi_contract_path }}"
+{% endif -%}
+FRONTEND_SCHEMA="${REPO_ROOT}/{{ frontend_schema_path }}"
+
+openapi_typescript() {
+  if command -v openapi-typescript >/dev/null 2>&1; then
+    openapi-typescript "$@"
+    return
+  fi
+
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm dlx openapi-typescript "$@"
+    return
+  fi
+
+  if command -v npx >/dev/null 2>&1; then
+    npx -y openapi-typescript "$@"
+    return
+  fi
+
+  printf 'openapi-typescript is required. Install it, or install Node.js with pnpm/npx available.\n' >&2
+  exit 1
+}
+
+format_schema() {
+  local schema_path="$1"
+
+  if command -v pnpm >/dev/null 2>&1 && [[ -f "${REPO_ROOT}/{{ frontend_dir }}/.prettierrc" ]] && pnpm --dir "${REPO_ROOT}/{{ frontend_dir }}" exec prettier --version >/dev/null 2>&1; then
+    pnpm --dir "${REPO_ROOT}/{{ frontend_dir }}" exec prettier --write \
+      --config "${REPO_ROOT}/{{ frontend_dir }}/.prettierrc" \
+      --ignore-path /dev/null \
+      "${schema_path}" >/dev/null
+  fi
+}
+
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/{{ project_slug }}-api-contract.XXXXXX")"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+mkdir -p "$(dirname "${OPENAPI_CONTRACT}")" "$(dirname "${FRONTEND_SCHEMA}")"
+
+{% if backend_stack == 'rust' -%}
+printf 'Generating backend OpenAPI document\n'
+cargo run -p {{ rust_api_package }} --bin {{ rust_openapi_bin }} -- "${TMP_DIR}/openapi.raw.json"
+node "${REPO_ROOT}/scripts/normalize-openapi.mjs" "${TMP_DIR}/openapi.raw.json" "${OPENAPI_CONTRACT}"
+
+{% elif backend_stack == 'dotnet' -%}
+printf 'Generating backend OpenAPI document\n'
+ASPNETCORE_ENVIRONMENT=Production dotnet build "${BACKEND_PROJECT}"
+node "${REPO_ROOT}/scripts/normalize-openapi.mjs" "${OPENAPI_BUILD_OUTPUT}" "${OPENAPI_CONTRACT}"
+
+{% endif -%}
+printf 'Generating frontend API types\n'
+openapi_typescript "${OPENAPI_CONTRACT}" -o "${FRONTEND_SCHEMA}"
+format_schema "${FRONTEND_SCHEMA}"
+
+printf 'API contract generated.\n'
+{% else -%}
+printf 'API contract generation is disabled for this project.\n'
+{% endif %}

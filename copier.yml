@@ -1,0 +1,169 @@
+_min_copier_version: "9.0.0"
+_templates_suffix: ".jinja"
+_answers_file: ".copier-answers.yml"
+_exclude:
+  - ".git"
+  - ".DS_Store"
+  - "copier.yml"
+  - "TEMPLATE.md"
+  - "node_modules"
+  - "target"
+
+project_name:
+  type: str
+  help: Human-readable project name.
+  default: "My Project"
+
+project_slug:
+  type: str
+  help: Machine-readable project slug used in package names, temp dirs, and default health text.
+  default: "{{ project_name | lower | replace(' ', '-') }}"
+
+project_summary:
+  type: str
+  help: One-sentence project summary for README and docs.
+  default: "{{ project_name }} project workspace."
+
+main_spec_title:
+  type: str
+  help: Title of the primary product spec.
+  default: "{{ project_name }} Spec v0.1"
+
+main_spec_slug:
+  type: str
+  help: File slug for the primary product spec under docs/specs.
+  default: "{{ project_slug }}-spec"
+
+backend_stack:
+  type: str
+  help: Backend gate family to wire into scripts and docs.
+  choices:
+    Rust workspace: rust
+    .NET API: dotnet
+    No backend yet: none
+  default: rust
+
+frontend_stack:
+  type: str
+  help: Frontend gate family to wire into scripts and docs.
+  choices:
+    Vite app with pnpm: vite
+    Astro app with pnpm: astro
+    No frontend yet: none
+  default: vite
+
+frontend_dir:
+  type: str
+  help: Frontend directory relative to repo root.
+  when: "{{ frontend_stack != 'none' }}"
+  default: "{% if frontend_stack == 'vite' %}apps/web{% else %}frontend{% endif %}"
+
+pnpm_version:
+  type: str
+  help: pnpm version used by generated frontend and CI commands.
+  default: "10.33.0"
+
+node_version:
+  type: str
+  help: Node.js major version for CI.
+  default: "24"
+
+rust_api_package:
+  type: str
+  help: Cargo package that runs the HTTP API.
+  when: "{{ backend_stack == 'rust' }}"
+  default: "{{ project_slug }}-api"
+
+rust_openapi_bin:
+  type: str
+  help: Cargo binary that writes OpenAPI JSON to the path passed as its first argument.
+  when: "{{ backend_stack == 'rust' }}"
+  default: "generate-openapi"
+
+dotnet_solution_path:
+  type: str
+  help: .NET solution path used by build, test, and format gates.
+  when: "{{ backend_stack == 'dotnet' }}"
+  default: "backend/{{ project_name | replace(' ', '') }}.slnx"
+
+dotnet_api_project_path:
+  type: str
+  help: .NET API csproj path.
+  when: "{{ backend_stack == 'dotnet' }}"
+  default: "backend/{{ project_name | replace(' ', '') }}.Api/{{ project_name | replace(' ', '') }}.Api.csproj"
+
+dotnet_openapi_build_output:
+  type: str
+  help: OpenAPI JSON path produced by the .NET build.
+  when: "{{ backend_stack == 'dotnet' }}"
+  default: "backend/{{ project_name | replace(' ', '') }}.Api/obj/{{ project_slug }}-api.json"
+
+dotnet_openapi_contract_path:
+  type: str
+  help: Committed backend OpenAPI contract path.
+  when: "{{ backend_stack == 'dotnet' }}"
+  default: "backend/{{ project_name | replace(' ', '') }}.Api/openapi/{{ project_slug }}-api.json"
+
+api_host:
+  type: str
+  help: Default API host for dev and smoke scripts.
+  when: "{{ backend_stack != 'none' }}"
+  default: "127.0.0.1"
+
+api_port:
+  type: int
+  help: Default API port for dev and smoke scripts.
+  when: "{{ backend_stack != 'none' }}"
+  default: "{% if backend_stack == 'dotnet' %}5180{% else %}3001{% endif %}"
+
+api_health_path:
+  type: str
+  help: API path checked by health and smoke scripts.
+  when: "{{ backend_stack != 'none' }}"
+  default: "/api/health"
+
+api_health_text:
+  type: str
+  help: Text expected in the API health response.
+  when: "{{ backend_stack != 'none' }}"
+  default: "{{ project_slug }}-api"
+
+frontend_host:
+  type: str
+  help: Default frontend host for dev and smoke scripts.
+  when: "{{ frontend_stack != 'none' }}"
+  default: "127.0.0.1"
+
+frontend_port:
+  type: int
+  help: Default frontend port for dev and smoke scripts.
+  when: "{{ frontend_stack != 'none' }}"
+  default: "{% if frontend_stack == 'astro' %}4321{% else %}5173{% endif %}"
+
+frontend_health_text:
+  type: str
+  help: Text expected in the frontend home page during health and smoke checks.
+  when: "{{ frontend_stack != 'none' }}"
+  default: "{{ project_name }}"
+
+include_api_contract:
+  type: bool
+  help: Generate OpenAPI freshness scripts and wire them into finalize.
+  default: "{{ backend_stack != 'none' and frontend_stack != 'none' }}"
+
+openapi_contract_path:
+  type: str
+  help: Committed OpenAPI contract path for Rust projects.
+  when: "{{ backend_stack == 'rust' and include_api_contract }}"
+  default: "generated/openapi.json"
+
+frontend_schema_path:
+  type: str
+  help: Generated frontend API TypeScript schema path.
+  when: "{{ frontend_stack != 'none' and include_api_contract }}"
+  default: "{% if frontend_stack == 'vite' %}{{ frontend_dir }}/src/shared/api/schema.d.ts{% else %}{{ frontend_dir }}/src/shared/api/generated/schema.d.ts{% endif %}"
+
+include_layering_validator:
+  type: bool
+  help: Add scripts/validate-layering.mjs and wire it into finalize.
+  default: true

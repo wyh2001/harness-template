@@ -1,0 +1,56 @@
+name: Finalize
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+{% if backend_stack == 'rust' %}
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+{% elif backend_stack == 'dotnet' %}
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+{% endif %}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: {{ node_version }}
+{% if frontend_stack != 'none' %}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: {{ pnpm_version }}
+
+      - name: Install frontend dependencies
+        run: pnpm --dir {{ frontend_dir }} install --frozen-lockfile
+
+{% if frontend_stack == 'astro' %}
+      - name: Install Playwright browsers
+        run: pnpm --dir {{ frontend_dir }} exec playwright install --with-deps chromium
+
+{% endif %}
+{% endif %}
+{% if backend_stack == 'dotnet' %}
+      - name: Restore backend
+        run: dotnet restore {{ dotnet_solution_path }}
+
+{% endif %}
+      - name: Run final validation
+        run: ./scripts/finalize.sh

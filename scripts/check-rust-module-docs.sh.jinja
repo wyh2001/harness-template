@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+cd "${REPO_ROOT}"
+
+if [[ ! -d crates ]]; then
+  printf 'Rust module docs check requires a crates/ directory.\n' >&2
+  exit 1
+fi
+
+missing=()
+missing_count=0
+
+while IFS= read -r file; do
+  first_non_empty="$(awk 'NF { print; exit }' "${file}")"
+
+  if [[ "${first_non_empty}" != '//!'* ]]; then
+    missing+=("${file}")
+    missing_count=$((missing_count + 1))
+  fi
+done < <(find crates -type f -name '*.rs' | sort)
+
+if ((missing_count > 0)); then
+  printf 'Rust files missing module-level //! docs:\n' >&2
+  printf '  %s\n' "${missing[@]}" >&2
+  exit 1
+fi
+
+printf 'Rust module docs check passed.\n'
