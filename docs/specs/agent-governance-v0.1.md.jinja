@@ -65,6 +65,8 @@ Future checks should be added when a rule becomes repeated, easy to forget, or i
 
 Checks that depend on real application structure should be staged. Decide the desired rule before scaffolding, document it in the relevant spec, then wire the check after the backend/frontend/tooling path exists.
 
+Formatting and generation must converge: if a formatter and generator keep changing the same generated file back and forth, exclude that generated path from formatter globs, post-format during generation, or make the generator emit formatter-stable output.
+
 ## 4. Documentation Style
 
 Docs should be indexed, cross-linked, and scoped.

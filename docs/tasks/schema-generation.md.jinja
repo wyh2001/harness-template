@@ -34,6 +34,7 @@ Generated schema checks are not enabled yet. Use this task as the checklist to c
 - Do not hand-edit generated files.
 - Do not copy backend DTOs into frontend feature code by hand.
 - Keep generation deterministic. Sort or normalize output when tools produce unstable key ordering.
+- Formatting and generation must converge: if a formatter and generator keep changing the same generated file back and forth, exclude that generated path from formatter globs, post-format during generation, or make the generator emit formatter-stable output.
 - Freshness failures should say which command regenerates the artifact.
 
 ## Output

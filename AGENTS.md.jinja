@@ -35,6 +35,8 @@ Run write-mode formatting:
 ./scripts/format.sh
 ```
 
+Formatting and generation must converge: if a formatter and generator keep changing the same generated file back and forth, exclude that generated path from formatter globs, post-format during generation, or make the generator emit formatter-stable output.
+
 Run final validation:
 
 ```bash
