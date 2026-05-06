@@ -41,7 +41,7 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm --dir {{ frontend_dir }} install --frozen-lockfile
 
-{% if frontend_stack == 'astro' %}
+{% if include_playwright_e2e | default(false) %}
       - name: Install Playwright browsers
         run: pnpm --dir {{ frontend_dir }} exec playwright install --with-deps chromium
 

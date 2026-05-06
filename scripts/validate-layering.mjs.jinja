@@ -7,6 +7,7 @@ const workspaceRoot = process.cwd();
 const backendStack = '{{ backend_stack }}';
 const frontendStack = '{{ frontend_stack }}';
 const frontendDir = '{{ frontend_dir | default("") }}';
+const maxHandWrittenSourceLines = 300;
 const findings = [];
 const featureValidationCache = new Map();
 
@@ -45,6 +46,63 @@ function readFile(filePath) {
 
 function addFinding(filePath, message) {
   findings.push(`${toRepoPath(filePath)}: ${message}`);
+}
+
+function countLines(content) {
+  if (content.length === 0) {
+    return 0;
+  }
+
+  return content.replace(/\r\n|\r/g, '\n').replace(/\n$/, '').split('\n').length;
+}
+
+function isGeneratedOrVendorPath(repoPath) {
+  const normalized = repoPath.toLowerCase();
+  return (
+    normalized.includes('/generated/') ||
+    normalized.includes('/openapi/') ||
+    normalized.includes('/migrations/') ||
+    normalized.includes('/node_modules/') ||
+    normalized.includes('/target/') ||
+    normalized.includes('/bin/') ||
+    normalized.includes('/obj/') ||
+    normalized.includes('/dist/') ||
+    normalized.includes('/build/') ||
+    normalized.endsWith('.d.ts') ||
+    normalized.endsWith('.g.cs') ||
+    normalized.endsWith('.designer.cs')
+  );
+}
+
+function validateFileSizeForDir(dirPath, predicate) {
+  for (const filePath of walkFiles(dirPath, predicate)) {
+    const repoPath = toRepoPath(filePath);
+    if (isGeneratedOrVendorPath(repoPath)) {
+      continue;
+    }
+
+    const lineCount = countLines(readFile(filePath));
+    if (lineCount > maxHandWrittenSourceLines) {
+      addFinding(
+        filePath,
+        `hand-written product source files must stay at or below ${maxHandWrittenSourceLines} lines; split this file by feature, layer, route, component, helper, or test journey (${lineCount} lines)`,
+      );
+    }
+  }
+}
+
+function validateHandWrittenSourceFileSizes() {
+{% if backend_stack == 'rust' %}
+  validateFileSizeForDir(path.join(workspaceRoot, 'crates'), (candidate) => candidate.endsWith('.rs'));
+{% elif backend_stack == 'dotnet' %}
+  validateFileSizeForDir(path.join(workspaceRoot, 'backend'), (candidate) => candidate.endsWith('.cs'));
+{% endif %}
+{% if frontend_stack != 'none' %}
+  validateFileSizeForDir(path.join(workspaceRoot, frontendDir, 'src'), (candidate) => /\.(astro|svelte|tsx?|jsx?)$/.test(candidate));
+{% if include_playwright_e2e | default(false) %}
+  validateFileSizeForDir(path.join(workspaceRoot, '{{ e2e_test_dir }}'), (candidate) => /\.(tsx?|jsx?)$/.test(candidate));
+{% endif %}
+{% endif %}
 }
 
 function collectImportSpecifiers(content) {
@@ -317,6 +375,7 @@ if (backendStack === 'dotnet') {
 }
 
 validateFrontendLayers();
+validateHandWrittenSourceFileSizes();
 
 if (findings.length > 0) {
   console.error('Architecture layering violations:');

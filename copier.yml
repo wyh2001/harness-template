@@ -148,7 +148,7 @@ frontend_health_text:
 
 include_api_contract:
   type: bool
-  help: Generate OpenAPI freshness scripts and wire them into finalize.
+  help: Generate OpenAPI freshness scripts and wire them into finalize so backend/frontend DTOs have one source of truth.
   default: "{{ backend_stack != 'none' and frontend_stack != 'none' }}"
 
 openapi_contract_path:
@@ -167,3 +167,21 @@ include_layering_validator:
   type: bool
   help: Add scripts/validate-layering.mjs and wire it into finalize.
   default: true
+
+include_playwright_e2e:
+  type: bool
+  help: Wire a Playwright E2E gate into docs, finalize, and CI after the frontend scaffold exists.
+  when: "{{ frontend_stack != 'none' }}"
+  default: false
+
+playwright_config_path:
+  type: str
+  help: Playwright config path used by the E2E task and validation docs.
+  when: "{{ frontend_stack != 'none' and include_playwright_e2e }}"
+  default: "{{ frontend_dir }}/playwright.config.ts"
+
+e2e_test_dir:
+  type: str
+  help: E2E test directory used by the Playwright task docs.
+  when: "{{ frontend_stack != 'none' and include_playwright_e2e }}"
+  default: "{{ frontend_dir }}/e2e"

@@ -10,7 +10,8 @@ Related decision: [0001. Adopt Agent-legible Repository Harness](../decisions/00
 
 Layering rules describe dependency direction and ownership. They are not a demand for ceremony before the project needs it.
 
-{% if backend_stack == 'rust' -%}
+Before scaffolding a new stack or feature, write down the intended layer map and the DTO/source-of-truth strategy. It is cheaper to encode direction before code exists than to unwind reverse dependencies later.
+{% if backend_stack == 'rust' %}
 ## 2. Rust Backend Layers
 
 Target direction:
@@ -37,7 +38,7 @@ Rules:
 - route handlers should translate HTTP to application calls and map results back to HTTP.
 
 Rust source files under `crates/` should start with a short `//!` module boundary comment.
-{% elif backend_stack == 'dotnet' -%}
+{% elif backend_stack == 'dotnet' %}
 ## 2. .NET Backend Layers
 
 Target feature shape:
@@ -72,6 +73,10 @@ Rules:
 - infrastructure owns provider wiring, persistence, configuration, and external systems.
 - endpoint files must not use `DbContext` or save changes directly.
 - feature code should use named providers for clock, current user/request context, environment, and logging.
+{% else %}
+## 2. Backend Layers
+
+No backend stack is selected yet. Before adding one, choose its layer map and update this section with dependency direction, ownership boundaries, and early enforcement targets.
 {% endif -%}
 {% if frontend_stack != 'none' %}
 ## 3. Frontend Layers
@@ -104,7 +109,7 @@ types -> config -> repo -> service -> runtime -> components/pages
 
 Layer responsibilities:
 
-- `types.ts`: DTOs, value types, parse/validation schemas when needed.
+- `types.ts`: feature-local value/view types and parse schemas when needed; do not copy backend DTOs by hand when generated or shared API types exist.
 - `config.ts`: feature constants, labels, allowed sort/filter modes.
 - `repo.ts`: backend API calls for the feature, using `shared/api`.
 - `service.ts`: pure business/view transformation logic.
@@ -113,11 +118,15 @@ Layer responsibilities:
 - `pages/`: route composition.
 
 Frontend components should not call `fetch` directly. Use feature repo/service/runtime boundaries.
+{% else %}
+## 3. Frontend Layers
+
+No frontend stack is selected yet. Before adding one, choose its feature folder shape, state/runtime boundary, and DTO/source-of-truth strategy for backend data.
 {% endif %}
 ## 4. Generated Contracts
 
 {% if include_api_contract | default(false) -%}
-Backend API DTOs are generated into OpenAPI and frontend API types.
+Backend API DTOs are generated into OpenAPI and frontend API types. This is the selected source-of-truth strategy for backend/frontend payloads.
 
 Committed generated artifacts:
 
@@ -126,7 +135,7 @@ Committed generated artifacts:
 
 Frontend feature code should import generated API types instead of copying backend response shapes by hand.
 {% else -%}
-Generated contracts are not enabled yet. If API schema generation is introduced, add both a generation script and a freshness check before feature code depends on generated output.
+Generated contracts are not enabled yet. Before backend and frontend integrate, choose exactly one DTO/source-of-truth strategy such as generated OpenAPI types, a shared schema package, typed RPC, or GraphQL codegen. Add both a generation script and a freshness check before feature code depends on that contract.
 {% endif %}
 ## 5. Current Enforcement
 
@@ -134,7 +143,6 @@ The current validator is intentionally narrow. It should block shortcuts without
 
 {% if include_layering_validator -%}
 Enforced now:
-
 {% if backend_stack == 'rust' -%}
 - Rust `crates/core` files must not import HTTP, SQL, provider SDK, or environment/runtime concerns.
 - Rust `crates/app` files must not import HTTP boundary or concrete database concerns.
@@ -153,14 +161,15 @@ Enforced now:
 {% if include_api_contract | default(false) -%}
 - Committed backend OpenAPI and frontend API types must match the current backend.
 {% endif %}
+- Hand-written product source files must stay at or below 300 lines. Generated files, lockfiles, build output, harness scripts, and package-manager output are excluded.
+
 Not enforced yet:
 
 - Complete feature folder naming.
 - Mandatory file shape for every feature.
-- File size limits.
 - Every provider boundary that has not appeared in production code yet.
 {% else -%}
-No mechanical layering validator is enabled yet. Add one when a convention becomes repeated and cheap to verify.
+No mechanical layering validator is enabled yet. Add one when a convention becomes repeated and cheap to verify. The first rules to encode should be dependency direction and the 300-line limit for hand-written product source files.
 {% endif %}
 ## 6. Runtime Feedback Loop
 

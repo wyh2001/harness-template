@@ -1,0 +1,67 @@
+# Scaffold Planning Task
+
+## Goal
+
+Decide the project boundaries that should exist before an agent generates backend, frontend, feature, or validation code.
+
+Use this task as a planning checklist. It is not a request to copy framework configuration before the selected stack exists.
+
+The planning output should distribute durable guidance to the right place: product intent in the main spec, layer direction in the architecture spec, repeatable procedures in task docs, and mechanical rules in scripts when the target stack exists.
+
+## Checklist
+
+1. Confirm the selected stack and directories:
+   - backend: `{% if backend_stack == 'none' %}not selected yet{% elif backend_stack == 'rust' %}Rust workspace under crates/{% else %}.NET solution at {{ dotnet_solution_path }}{% endif %}`
+   - frontend: `{% if frontend_stack == 'none' %}not selected yet{% else %}{{ frontend_stack }} app under {{ frontend_dir }}{% endif %}`
+2. Update `docs/specs/{{ main_spec_slug }}-v0.1.md` with the current product scope, user journeys, and data/contract ownership.
+3. Update `docs/specs/architecture-layering-v0.1.md` before creating code that crosses a new layer boundary.
+4. Define the dependency direction for each feature. Code should depend forward through the documented layers and must not reverse-import runtime/UI concerns into lower layers.
+5. Pick exactly one DTO/source-of-truth strategy before the frontend consumes backend data:
+   - generated OpenAPI and generated frontend types,
+   - shared schema package,
+   - tRPC or another typed RPC boundary,
+   - GraphQL schema plus code generation.
+6. Add or plan a freshness check for the chosen contract strategy. If the backend/frontend do not exist yet, record the intended check and add it when the stack is scaffolded.
+7. Keep hand-written product source files at or below 300 lines. Split by domain, layer, route, component, or helper before growing a file past that limit.
+{% if frontend_stack != 'none' -%}
+8. Explicitly evaluate Playwright for this frontend. If stable browser journeys exist or are part of the immediate scaffold, install Playwright and wire `test:e2e`; otherwise record why E2E is deferred and what condition will make it active. Do not wire browser E2E into `finalize.sh` until the frontend can start reliably and at least one stable user journey exists.
+{% endif %}
+## Example Output
+
+This is an example shape, not a required architecture. Replace names and layers with what the project actually needs.
+
+```text
+Feature: Saved Searches
+
+Backend:
+  Domain/SearchQuery          owns validated query value objects.
+  Application/SavedSearches   owns use cases and repository/provider traits.
+  Infrastructure/SearchStore  implements persistence.
+  Api/SavedSearchEndpoints    maps HTTP requests/responses and OpenAPI metadata.
+
+Frontend:
+  features/saved-searches/types.ts       imports generated API types and defines local view types only.
+  features/saved-searches/config.ts      owns labels, limits, and filter modes.
+  features/saved-searches/repo.ts        calls shared/api and translates transport errors.
+  features/saved-searches/service.ts     owns pure view transformations and business rules.
+  features/saved-searches/runtime.ts     owns loading/error state, effects, and orchestration.
+  features/saved-searches/components/    renders UI and emits user events.
+
+Direction:
+  DTO source of truth -> repo -> service -> runtime -> components/pages.
+  Components do not call fetch. Runtime does not import components. Service does not import runtime.
+
+Checks:
+  Active now: 300-line product source limit and frontend fetch/import layering checks.
+  Deferred: Playwright journey for create/edit/delete after routes and seeded test data exist.
+```
+
+## Output
+
+Record:
+
+- layer map or feature folder shape.
+- DTO/source-of-truth choice and check command.
+- checks that are active now.
+- checks intentionally deferred until the stack exists.
+- open questions that block scaffolding.

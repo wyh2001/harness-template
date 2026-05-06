@@ -4,7 +4,7 @@ Status: {% if include_api_contract | default(false) %}Accepted{% else %}Deferred
 
 ## Context
 
-Frontend/backend API drift is easy to miss when DTOs are copied by hand. A generated contract gives agents and humans a concrete artifact to compare.
+Frontend/backend API drift is easy to miss when DTOs are copied by hand. A single DTO/source-of-truth strategy gives agents and humans a concrete artifact to compare.
 
 ## Decision
 
@@ -13,7 +13,7 @@ Generate backend OpenAPI and frontend API TypeScript types with `./scripts/gener
 
 `./scripts/finalize.sh` runs `./scripts/check-api-contract.sh` to confirm committed generated artifacts are current.
 {% else -%}
-Generated API contracts are not enabled yet for this project shape. If a backend/frontend API boundary becomes important, add generation and freshness scripts before relying on handwritten DTO duplication.
+Generated API contracts are not enabled yet for this project shape. If a backend/frontend API boundary becomes important, choose one DTO/source-of-truth strategy and add generation plus freshness scripts before relying on frontend API shapes.
 {% endif %}
 ## Consequences
 

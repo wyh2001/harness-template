@@ -64,9 +64,6 @@ pnpm --dir {{ frontend_dir }} check
 print_stage "Frontend tests"
 pnpm --dir {{ frontend_dir }} test
 
-print_stage "Frontend e2e"
-pnpm --dir {{ frontend_dir }} test:e2e
-
 print_stage "Frontend build"
 pnpm --dir {{ frontend_dir }} build
 
@@ -76,6 +73,13 @@ pnpm --dir {{ frontend_dir }} lint
 
 print_stage "Frontend build"
 pnpm --dir {{ frontend_dir }} build
+
+{% endif -%}
+{% if include_playwright_e2e | default(false) -%}
+require_path "{{ playwright_config_path }}" "Playwright E2E is enabled; add {{ playwright_config_path }} after the frontend scaffold exists."
+
+print_stage "Frontend e2e"
+pnpm --dir {{ frontend_dir }} test:e2e
 
 {% endif -%}
 {% endif -%}

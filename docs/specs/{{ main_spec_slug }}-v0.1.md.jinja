@@ -22,6 +22,8 @@ TODO: List tempting directions that are explicitly out of scope for now.
 
 ## 5. Data And Contracts
 
+Define the authoritative shape for every API payload before frontend code consumes it.
+
 {% if include_api_contract | default(false) -%}
 Backend API shapes are generated into OpenAPI and frontend TypeScript types. The committed generated artifacts are part of the repository memory:
 
@@ -30,14 +32,28 @@ Backend API shapes are generated into OpenAPI and frontend TypeScript types. The
 
 Do not hand-write frontend DTOs that duplicate backend responses. Update backend contracts, run `./scripts/generate-api-contract.sh`, and commit the generated diff.
 {% else -%}
-TODO: Define which schemas, DTOs, migrations, or generated artifacts are authoritative.
+TODO: Choose exactly one DTO/source-of-truth strategy before backend and frontend integrate: generated OpenAPI types, a shared schema package, typed RPC, GraphQL codegen, or another explicit contract. Add a generation/freshness check before feature code depends on the contract.
 {% endif %}
-## 6. Validation Strategy
+## 6. Architecture Boundaries
+
+Before scaffolding code, define the initial feature/layer map in [Architecture Layering v0.1](./architecture-layering-v0.1.md).
+
+Rules that should hold from the first implementation:
+
+- lower layers must not import runtime, UI, transport, persistence, provider SDK, or framework boundary concerns unless that layer owns the boundary.
+- cross-cutting concerns should enter through explicit providers or interfaces.
+- hand-written product source files should stay at or below 300 lines; split by layer, route, component, or helper before exceeding that limit.
+
+## 7. Validation Strategy
 
 Use `./scripts/finalize.sh` as the final check-only gate for implementation work.
 
 Run `./scripts/smoke.sh` after changes to startup, routing, environment wiring, or cross-service integration.
 
-## 7. Open Questions
+{% if frontend_stack != 'none' -%}
+Explicitly evaluate Playwright E2E for this frontend. Enable it after the frontend can start reliably and at least one stable user journey exists; otherwise record the deferral reason. See [E2E Testing Task](../tasks/e2e-testing.md).
+
+{% endif -%}
+## 8. Open Questions
 
 - TODO: Capture unresolved product or architecture questions with enough context to answer later.

@@ -16,8 +16,12 @@ When changing specs, decisions, generated contracts, or code, keep the affected 
 
 When checking whether docs, generated contracts, scripts, and code still align, use [Alignment Check Task](./tasks/alignment-check.md).
 
-When backend API shapes change, use [Schema Generation Task](./tasks/schema-generation.md).
+Before scaffolding a backend, frontend, feature slice, or validation gate, use [Scaffold Planning Task](./tasks/scaffold-planning.md).
 
+When backend API shapes change, use [Schema Generation Task](./tasks/schema-generation.md).
+{% if frontend_stack != 'none' %}
+When a frontend exists, explicitly evaluate Playwright E2E with [E2E Testing Task](./tasks/e2e-testing.md). Enable it when stable user journeys exist; otherwise record the deferral reason.
+{% endif %}
 ## Specs
 
 - [{{ main_spec_title }}](./specs/{{ main_spec_slug }}-v0.1.md) - Product scope and intended current behavior.
@@ -32,4 +36,8 @@ When backend API shapes change, use [Schema Generation Task](./tasks/schema-gene
 ## Tasks
 
 - [Alignment Check Task](./tasks/alignment-check.md) - Checklist for detecting and fixing drift between docs, generated contracts, decisions, code, and checks.
+- [Scaffold Planning Task](./tasks/scaffold-planning.md) - Checklist for deciding layers, DTO ownership, and staged checks before asking an agent to scaffold code.
 - [Schema Generation Task](./tasks/schema-generation.md) - Workflow for regenerating OpenAPI and frontend API types.
+{% if frontend_stack != 'none' -%}
+- [E2E Testing Task](./tasks/e2e-testing.md) - Workflow for introducing and maintaining Playwright user-journey tests.
+{% endif -%}

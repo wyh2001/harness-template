@@ -9,6 +9,8 @@ Before project work, read:
 
 Use this file as a table of contents, not as a full instruction manual. Durable project knowledge should live in `docs/`.
 
+Before scaffolding a new backend, frontend, feature slice, or validation gate, use `docs/tasks/scaffold-planning.md` to record layer direction, DTO/source-of-truth strategy, and checks that can be added now versus later.
+
 ## Project Structure
 
 {% if backend_stack == 'rust' -%}
@@ -54,8 +56,22 @@ Regenerate backend OpenAPI and frontend API types:
 
 `finalize.sh` checks that committed generated contracts are current. Do not hand-write frontend DTOs for backend API responses.
 
+{% endif -%}
 Before changing project conventions, validation scripts, architecture rules, generated schemas, or agent-facing docs, read `docs/specs/agent-governance-v0.1.md`.
 
+{% if frontend_stack != 'none' -%}
+For frontend projects, explicitly evaluate Playwright E2E during scaffold planning. If it is relevant now, install and wire it using `docs/tasks/e2e-testing.md`; if not, record why it is deferred and what will make it active.
+
+{% if include_playwright_e2e | default(false) -%}
+Run E2E tests:
+
+```bash
+pnpm --dir {{ frontend_dir }} test:e2e
+```
+
+`finalize.sh` includes this E2E gate. Keep `{{ playwright_config_path }}` and the frontend `test:e2e` script aligned.
+
+{% endif -%}
 {% endif -%}
 For documentation, contract, and code alignment checks, use `docs/tasks/alignment-check.md`.
 
@@ -108,6 +124,9 @@ Frontend:
 ```bash
 pnpm --dir {{ frontend_dir }} dev
 pnpm --dir {{ frontend_dir }} build
+{% if include_playwright_e2e | default(false) -%}
+pnpm --dir {{ frontend_dir }} test:e2e
+{% endif -%}
 {% if frontend_stack == 'astro' -%}
 pnpm --dir {{ frontend_dir }} check
 pnpm --dir {{ frontend_dir }} test
@@ -128,6 +147,9 @@ Markdown:
 
 - Keep repository-local docs as the system of record.
 - Prefer small indexed docs over one large instruction file.
+- Plan layer boundaries before scaffolding code; dependencies should not point backward through the documented layer direction.
+- Keep hand-written product source files at or below 300 lines; split by domain, layer, or helper before growing past that boundary.
 - Add mechanical checks when a convention becomes important.
 - Keep generated contracts current and committed when they are part of the workflow.
 - When docs and code drift, update the stale artifact in the same change when feasible.
+- Use short commit messages that describe the actual change; conventional types like `docs:`, `fix:`, `feat:`, or `chore:` are fine when they fit.

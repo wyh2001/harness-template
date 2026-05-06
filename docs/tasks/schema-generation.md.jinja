@@ -4,22 +4,31 @@
 
 Keep generated schema artifacts reproducible and aligned with source code.
 
+Use one authoritative DTO/source-of-truth strategy for backend/frontend payloads. Do not let frontend feature code define independent copies of backend request or response shapes.
+
 {% if include_api_contract | default(false) -%}
 This project commits:
 
 - `{% if backend_stack == 'dotnet' %}{{ dotnet_openapi_contract_path }}{% else %}{{ openapi_contract_path }}{% endif %}`
 - `{{ frontend_schema_path }}`
 {% else -%}
-Generated schema checks are not enabled yet. Use this task as the checklist to add them when the project needs generated artifacts.
+Generated schema checks are not enabled yet. Use this task as the checklist to choose a contract strategy and add a freshness check when the project needs generated artifacts.
 {% endif %}
 ## Checklist
 
-1. Change the source contract first: backend DTOs, endpoint metadata, validation, or schema source files.
-2. Run `./scripts/generate-api-contract.sh`.
-3. Review generated diffs for accidental breaking changes.
-4. Update affected docs or decisions when the public API meaning changed.
-5. Run `./scripts/check-api-contract.sh` or `./scripts/finalize.sh`.
-
+1. Confirm the selected contract strategy: generated OpenAPI types, shared schema package, typed RPC, GraphQL codegen, or another explicit source of truth.
+2. Change the source contract first: backend DTOs, endpoint metadata, validation, or schema source files.
+{% if include_api_contract | default(false) -%}
+3. Run `./scripts/generate-api-contract.sh`.
+4. Review generated diffs for accidental breaking changes.
+5. Update affected docs or decisions when the public API meaning changed.
+6. Run `./scripts/check-api-contract.sh` or `./scripts/finalize.sh`.
+{% else -%}
+3. Add the generator command and deterministic output path.
+4. Add a check-only freshness command and wire it into `./scripts/finalize.sh` when stable.
+5. Review generated diffs for accidental breaking changes.
+6. Update affected docs or decisions when the public API meaning changed.
+{% endif %}
 ## Rules
 
 - Do not hand-edit generated files.

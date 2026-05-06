@@ -56,6 +56,21 @@
       }
     },
 {% endif %}
+{% if include_playwright_e2e | default(false) %}
+    {
+      "label": "test:e2e",
+      "type": "shell",
+      "command": "pnpm --dir {{ frontend_dir }} test:e2e",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+{% endif %}
     {
       "label": "finalize",
       "type": "shell",
