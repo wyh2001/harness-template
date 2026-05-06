@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Harness Bootstrap"
+  short_description: "Bootstrap agent-legible repo harnesses"
+  default_prompt: "Use $repo-harness-bootstrap to set up agent-legible docs, checks, and staged E2E guidance for this new repo."

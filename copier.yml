@@ -6,6 +6,7 @@ _exclude:
   - ".DS_Store"
   - "copier.yml"
   - "TEMPLATE.md"
+  - ".agents"
   - "node_modules"
   - "target"
 
