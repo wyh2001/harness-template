@@ -152,6 +152,7 @@ Markdown:
 - Plan layer boundaries before scaffolding code; dependencies should not point backward through the documented layer direction.
 - Keep hand-written product source files at or below 300 lines; split by domain, layer, or helper before growing past that boundary.
 - Add mechanical checks when a convention becomes important.
+- If the user's request is ambiguous or the intended action is unclear, pause and confirm before proceeding; offer concise options when that helps the user decide.
 - When fixing bugs, strongly prefer a fail-pass loop: first add or reproduce the failing test, then make it pass; for frontend bugs, strongly consider expressing the failure as a Playwright E2E check.
 - Keep generated contracts current and committed when they are part of the workflow.
 - When docs and code drift, update the stale artifact in the same change when feasible.
