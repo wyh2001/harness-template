@@ -157,6 +157,7 @@ Markdown:
 - Keep hand-written product source files at or below 300 lines; split by domain, layer, or helper before growing past that boundary.
 - Add mechanical checks when a convention becomes important.
 - If the user's request is ambiguous or the intended action is unclear, pause and confirm before proceeding; offer concise options when that helps the user decide.
+- Follow the order of operations in the user's instructions when an order is stated. If that order seems unsafe, impossible, or likely to cause avoidable rework, pause and ask before changing the sequence.
 - When fixing bugs, strongly prefer a fail-pass loop: first add or reproduce the failing test, then make it pass; for frontend bugs, strongly consider expressing the failure as a Playwright E2E check.
 - Do not keep a bug-fix test that passed before the fix as evidence of the bug.
 - Do not create git commits unless the user explicitly asks for a commit, release, publish, or PR workflow that requires one. Leave changes in the working tree and report what changed.
