@@ -85,6 +85,8 @@ Run the local stack:
 
 Do not run `./scripts/dev.sh` or frontend `dev` commands just because frontend files changed or to leave a preview running for the user. Start a live server only when the user asks to run the app or when runtime inspection, debugging, or browser-based verification needs it.
 
+When tests or runtime checks require backend or frontend services, do not assume the user's own server is already running or safe to reuse. Start the needed services through a dedicated script or process using an available isolated port, and shut down only the processes you started.
+
 Check a running local stack:
 
 ```bash
