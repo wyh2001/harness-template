@@ -30,7 +30,7 @@ Backend API shapes are generated into OpenAPI and frontend TypeScript types. The
 - `{% if backend_stack == 'dotnet' %}{{ dotnet_openapi_contract_path }}{% else %}{{ openapi_contract_path }}{% endif %}`
 - `{{ frontend_schema_path }}`
 
-Do not hand-write frontend DTOs that duplicate backend responses. Update backend contracts, run `./scripts/generate-api-contract.sh`, and commit the generated diff.
+Do not hand-write frontend DTOs that duplicate backend responses. Update backend contracts, run `./scripts/generate-api-contract.sh`, and include the generated diff in the same change.
 {% else -%}
 TODO: Choose exactly one DTO/source-of-truth strategy before backend and frontend integrate: generated OpenAPI types, a shared schema package, typed RPC, GraphQL codegen, or another explicit contract. Add a generation/freshness check before feature code depends on the contract.
 {% endif %}
