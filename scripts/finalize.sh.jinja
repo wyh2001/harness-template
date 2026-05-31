@@ -78,6 +78,9 @@ pnpm --dir {{ frontend_dir }} build
 {% if include_playwright_e2e | default(false) -%}
 require_path "{{ playwright_config_path }}" "Playwright E2E is enabled; add {{ playwright_config_path }} after the frontend scaffold exists."
 
+print_stage "Frontend e2e impact tags"
+node scripts/validate-playwright-impact-tags.mjs --strict
+
 print_stage "Frontend e2e"
 pnpm --dir {{ frontend_dir }} test:e2e
 
@@ -95,5 +98,8 @@ print_stage "API contract"
 {% endif -%}
 print_stage "Markdown lint"
 ./scripts/lint-md.sh
+
+print_stage "Agent governance"
+node scripts/validate-agent-governance.mjs
 
 print_stage "Finalize checks passed"

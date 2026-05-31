@@ -1,0 +1,170 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+
+const workspaceRoot = process.cwd();
+const changedScopeCommand = './scripts/validate-changed-scope.mjs';
+const fullGateCommand = './scripts/finalize.sh';
+const changedScopeReferencePattern = /(?:\.\/)?scripts\/validate-changed-scope\.mjs/;
+const findings = [];
+
+function toRepoPath(filePath) {
+  return path.relative(workspaceRoot, filePath).replaceAll(path.sep, '/');
+}
+
+function walkFiles(dirPath, predicate) {
+  const files = [];
+  if (!fs.existsSync(dirPath)) {
+    return files;
+  }
+
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      if (['.git', 'node_modules', 'target', 'dist', 'build', 'coverage'].includes(entry.name)) {
+        continue;
+      }
+
+      files.push(...walkFiles(fullPath, predicate));
+      continue;
+    }
+
+    if (!predicate || predicate(fullPath)) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function readIfExists(repoPath) {
+  const filePath = path.join(workspaceRoot, repoPath);
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  return {
+    filePath,
+    content: fs.readFileSync(filePath, 'utf8'),
+  };
+}
+
+function addFinding(filePath, lineNumber, message) {
+  const location = lineNumber ? `${toRepoPath(filePath)}:${lineNumber}` : toRepoPath(filePath);
+  findings.push(`${location}: ${message}`);
+}
+
+function validateRequiredLocalRule(repoPath) {
+  const file = readIfExists(repoPath);
+  if (!file) {
+    return;
+  }
+
+  if (!file.content.includes(changedScopeCommand)) {
+    addFinding(file.filePath, null, `must document ${changedScopeCommand} as the mandatory local completion check`);
+  }
+}
+
+function validateNoFullGateLocalCompletion(filePath, content) {
+  const lines = content.split(/\r?\n/);
+  const forbiddenCompletion = /\b(before|prior to|until|marking|considering|implementation work complete|work complete|complete locally|local completion)\b/i;
+  const allowedFullGateContext = /\b(CI|pre-merge|full[- ]gate|full finalization|explicit request|release readiness)\b/i;
+
+  lines.forEach((line, index) => {
+    if (!/finalize(?:-checks)?\.sh/.test(line)) {
+      return;
+    }
+
+    if (forbiddenCompletion.test(line) && !allowedFullGateContext.test(line)) {
+      addFinding(
+        filePath,
+        index + 1,
+        `${fullGateCommand} must not be documented as mandatory for ordinary local completion; use ${changedScopeCommand} locally`,
+      );
+    }
+  });
+}
+
+function validateFullGateMentionsChangedScope(filePath, content) {
+  if (!/finalize(?:-checks)?\.sh/.test(content)) {
+    return;
+  }
+
+  if (!changedScopeReferencePattern.test(content)) {
+    addFinding(filePath, null, `agent-facing docs that mention ${fullGateCommand} must also mention ${changedScopeCommand}`);
+  }
+}
+
+function collectAgentDocs() {
+  const docs = [];
+  const agentsFile = readIfExists('AGENTS.md');
+  if (agentsFile) {
+    docs.push(agentsFile);
+  }
+
+  for (const filePath of walkFiles(path.join(workspaceRoot, '.agents'), (candidate) => /\.(md|ya?ml|txt)$/.test(candidate))) {
+    docs.push({
+      filePath,
+      content: fs.readFileSync(filePath, 'utf8'),
+    });
+  }
+
+  return docs;
+}
+
+function collectGovernanceCheckFiles() {
+  const allowedExtensions = /\.(mjs|js|ts|tsx|sh|bash|ya?ml|md)$/;
+  return walkFiles(workspaceRoot, (candidate) => {
+    const repoPath = toRepoPath(candidate);
+    return (
+      allowedExtensions.test(candidate) &&
+      (repoPath.startsWith('scripts/') ||
+        repoPath.startsWith('tests/') ||
+        repoPath.startsWith('test/') ||
+        repoPath.startsWith('.github/workflows/'))
+    );
+  });
+}
+
+function validateNoFullRepositorySmokeCopy(filePath, content) {
+  const lines = content.split(/\r?\n/);
+
+  lines.forEach((line, index) => {
+    const normalized = line.replace(/\s+/g, ' ');
+    const copiesRecursively = /\bcp\s+-[A-Za-z]*[Rr][A-Za-z]*\s+/.test(normalized);
+    const usesFullRepoSource = /(?:^|\s)\.(?:\s|\/|$)|\$(?:\{REPO_ROOT\}|REPO_ROOT)(?:"|'|\s|$)/.test(normalized);
+    const syncsFullRepo = /\brsync\s+-[A-Za-z]*a[A-Za-z]*\s+(?:\.|\$(?:\{REPO_ROOT\}|REPO_ROOT)(?:"|'|\s|$))/.test(normalized);
+
+    if ((copiesRecursively && usesFullRepoSource) || syncsFullRepo) {
+      addFinding(
+        filePath,
+        index + 1,
+        'governance smoke tests must construct minimal fixtures instead of copying the full repository',
+      );
+    }
+  });
+}
+
+for (const repoPath of ['AGENTS.md', 'docs/specs/agent-governance-v0.1.md']) {
+  validateRequiredLocalRule(repoPath);
+}
+
+for (const doc of collectAgentDocs()) {
+  validateNoFullGateLocalCompletion(doc.filePath, doc.content);
+  validateFullGateMentionsChangedScope(doc.filePath, doc.content);
+}
+
+for (const filePath of collectGovernanceCheckFiles()) {
+  validateNoFullRepositorySmokeCopy(filePath, fs.readFileSync(filePath, 'utf8'));
+}
+
+if (findings.length > 0) {
+  console.error('Agent governance violations:');
+  for (const finding of findings) {
+    console.error(`  ${finding}`);
+  }
+  process.exit(1);
+}
+
+console.log('Agent governance checks passed.');

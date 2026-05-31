@@ -24,7 +24,7 @@ The planning output should distribute durable guidance to the right place: produ
 6. Add or plan a freshness check for the chosen contract strategy. If the backend/frontend do not exist yet, record the intended check and add it when the stack is scaffolded.
 7. Keep hand-written product source files at or below 300 lines. Split by domain, layer, route, component, or helper before growing a file past that limit.
 {% if frontend_stack != 'none' -%}
-8. Explicitly evaluate Playwright for this frontend. If stable browser journeys exist or are part of the immediate scaffold, install Playwright and wire `test:e2e`; otherwise record why E2E is deferred and what condition will make it active. Do not wire browser E2E into `finalize.sh` until the frontend can start reliably and at least one stable user journey exists.
+8. Explicitly evaluate Playwright for this frontend. If stable browser journeys exist or are part of the immediate scaffold, install Playwright, wire `test:e2e`, and tag specs with `@impact-*`; otherwise record why E2E is deferred and what condition will make it active. Do not wire browser E2E into `finalize.sh` until the frontend can start reliably and at least one stable user journey exists.
 {% endif %}
 ## Example Output
 

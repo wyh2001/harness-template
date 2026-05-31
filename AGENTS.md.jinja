@@ -37,16 +37,24 @@ Run write-mode formatting:
 
 Formatting and generation must converge: if a formatter and generator keep changing the same generated file back and forth, exclude that generated path from formatter globs, post-format during generation, or make the generator emit formatter-stable output.
 
-Run final validation:
+Run local changed-scope validation:
+
+```bash
+./scripts/validate-changed-scope.mjs
+```
+
+Before marking implementation work complete during local development, `validate-changed-scope.mjs` is mandatory. It selects checks from changed files, including frontend format/lint, related tests where possible, impacted Playwright E2E subsets, backend checks, and docs/governance checks.
+
+Run full finalization:
 
 ```bash
 ./scripts/finalize.sh
 ```
 
-`finalize.sh` is check-only and should not modify files. Run it before considering implementation work complete.
+`finalize.sh` is check-only and should not modify files. Use it for CI, pre-merge full-gate validation, or an explicit request for full finalization.
 
 {% if include_layering_validator -%}
-Architecture layering is enforced by `scripts/validate-layering.mjs` as part of `finalize.sh`. Update `docs/specs/architecture-layering-v0.1.md` before changing layer rules.
+Architecture layering is enforced by `scripts/validate-layering.mjs` as part of changed-scope validation when related files changed and as part of full finalization. Update `docs/specs/architecture-layering-v0.1.md` before changing layer rules.
 
 {% endif -%}
 {% if include_api_contract | default(false) -%}
@@ -56,7 +64,7 @@ Regenerate backend OpenAPI and frontend API types:
 ./scripts/generate-api-contract.sh
 ```
 
-`finalize.sh` checks that committed generated contracts are current. Do not hand-write frontend DTOs for backend API responses.
+Changed-scope validation and full finalization check committed generated contracts when API or schema files are affected. Do not hand-write frontend DTOs for backend API responses.
 
 {% endif -%}
 Before changing project conventions, validation scripts, architecture rules, generated schemas, or agent-facing docs, read `docs/specs/agent-governance-v0.1.md`.
@@ -71,7 +79,7 @@ Run E2E tests:
 pnpm --dir {{ frontend_dir }} test:e2e
 ```
 
-`finalize.sh` includes this E2E gate. Keep `{{ playwright_config_path }}` and the frontend `test:e2e` script aligned.
+`finalize.sh` includes the full E2E gate. Local changed-scope validation may run impacted E2E subsets selected by `@impact-*` tags, `scripts/playwright-impact-rules.mjs`, and `scripts/select-playwright-impact-tests.mjs`. Keep `{{ playwright_config_path }}`, the impact rules, the impact-tag validator, and the frontend E2E scripts aligned.
 
 {% endif -%}
 {% endif -%}
@@ -100,6 +108,8 @@ Run a temporary startup smoke check:
 ```
 
 `smoke.sh` starts the configured local services, checks configured endpoints, and kills only the PIDs it started. Run it after changes to startup, routing, environment wiring, or cross-app integration.
+
+Governance smoke tests must use minimal fixtures. Do not copy the full repository into a temp directory, and do not copy build outputs, `node_modules`, Rust `target`, Playwright artifacts, or other generated directories unless the test specifically needs them.
 
 ## Development Commands
 

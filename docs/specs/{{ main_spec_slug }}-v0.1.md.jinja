@@ -46,7 +46,7 @@ Rules that should hold from the first implementation:
 
 ## 7. Validation Strategy
 
-Use `./scripts/finalize.sh` as the final check-only gate for implementation work.
+Use `./scripts/validate-changed-scope.mjs` before marking local implementation work complete. Use `./scripts/finalize.sh` as the check-only CI/pre-merge full gate.
 
 Run `./scripts/smoke.sh` after changes to startup, routing, environment wiring, or cross-service integration.
 

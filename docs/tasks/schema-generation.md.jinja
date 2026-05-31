@@ -22,10 +22,10 @@ Generated schema checks are not enabled yet. Use this task as the checklist to c
 3. Run `./scripts/generate-api-contract.sh`.
 4. Review generated diffs for accidental breaking changes.
 5. Update affected docs or decisions when the public API meaning changed.
-6. Run `./scripts/check-api-contract.sh` or `./scripts/finalize.sh`.
+6. Run `./scripts/check-api-contract.sh` or `./scripts/validate-changed-scope.mjs`; use `./scripts/finalize.sh` for explicit full finalization.
 {% else -%}
 3. Add the generator command and deterministic output path.
-4. Add a check-only freshness command and wire it into `./scripts/finalize.sh` when stable.
+4. Add a check-only freshness command and wire it into `./scripts/validate-changed-scope.mjs` for API/schema changes and into `./scripts/finalize.sh` when stable.
 5. Review generated diffs for accidental breaking changes.
 6. Update affected docs or decisions when the public API meaning changed.
 {% endif %}

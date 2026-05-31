@@ -52,5 +52,5 @@ jobs:
         run: dotnet restore {{ dotnet_solution_path }}
 
 {% endif %}
-      - name: Run final validation
+      - name: Run full finalization
         run: ./scripts/finalize.sh

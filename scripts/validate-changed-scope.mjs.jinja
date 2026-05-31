@@ -1,0 +1,580 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { buildDecision, collectE2eSpecMetadata } from './select-playwright-impact-tests.mjs';
+
+{% set changed_scope_frontend_dir = frontend_dir | default('frontend') -%}
+{% set changed_scope_e2e_test_dir = e2e_test_dir | default(changed_scope_frontend_dir ~ '/e2e') -%}
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(scriptDir, '..');
+const backendStack = '{{ backend_stack | default("none") }}';
+const frontendStack = '{{ frontend_stack | default("none") }}';
+const frontendDir = '{{ changed_scope_frontend_dir }}';
+const e2eTestDir = '{{ changed_scope_e2e_test_dir }}';
+const includeApiContract = {% if include_api_contract | default(false) %}true{% else %}false{% endif %};
+const includeLayeringValidator = {% if include_layering_validator | default(false) %}true{% else %}false{% endif %};
+const includePlaywrightE2e = {% if include_playwright_e2e | default(false) %}true{% else %}false{% endif %};
+const dotnetSolutionPath = '{{ dotnet_solution_path | default("backend/App.slnx") }}';
+const apiContractPath = '{% if backend_stack == "dotnet" %}{{ dotnet_openapi_contract_path | default("") }}{% else %}{{ openapi_contract_path | default("generated/openapi.json") }}{% endif %}';
+const frontendSchemaPath = '{{ frontend_schema_path | default("") }}';
+
+const ignoredPathSegments = new Set([
+  '.git',
+  'node_modules',
+  'target',
+  'dist',
+  'build',
+  'coverage',
+  'playwright-report',
+  'test-results',
+  'bin',
+  'obj',
+]);
+
+function parseArgs(argv) {
+  const options = {
+    dryRun: false,
+    explicitFiles: [],
+    json: false,
+    since: null,
+    skipE2e: false,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--dry-run') {
+      options.dryRun = true;
+      continue;
+    }
+    if (arg === '--json') {
+      options.json = true;
+      continue;
+    }
+    if (arg === '--skip-e2e') {
+      options.skipE2e = true;
+      continue;
+    }
+    if (arg === '--since') {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error('--since requires a git ref.');
+      }
+      options.since = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      throw new Error(`Unknown argument '${arg}'.`);
+    }
+
+    options.explicitFiles.push(arg);
+  }
+
+  return options;
+}
+
+function normalizePath(filePath) {
+  return filePath.replaceAll(path.sep, '/').replace(/^\.\//, '');
+}
+
+function gitLines(args) {
+  const result = spawnSync('git', args, {
+    cwd: workspaceRoot,
+    encoding: 'utf8',
+  });
+
+  if (result.status !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function collectChangedFiles(options) {
+  const files =
+    options.explicitFiles.length > 0
+      ? options.explicitFiles
+      : [
+          ...gitLines(['diff', '--name-only', '--diff-filter=ACMRTUXB', options.since ?? 'HEAD', '--']),
+          ...gitLines(['diff', '--name-only', '--cached', '--diff-filter=ACMRTUXB', '--']),
+          ...gitLines(['ls-files', '--others', '--exclude-standard']),
+        ];
+
+  return [...new Set(files.map(normalizePath))]
+    .filter((filePath) => filePath.length > 0)
+    .filter((filePath) => !filePath.split('/').some((segment) => ignoredPathSegments.has(segment)))
+    .sort();
+}
+
+function toRepoRelative(fullPath) {
+  const relativePath = path.relative(workspaceRoot, fullPath).replaceAll(path.sep, '/');
+  return relativePath === '' ? '.' : relativePath;
+}
+
+function pathExists(repoPath) {
+  return fs.existsSync(path.join(workspaceRoot, repoPath));
+}
+
+function readPackageScripts(packageJsonPath) {
+  const fullPath = path.join(workspaceRoot, packageJsonPath);
+  if (!fs.existsSync(fullPath)) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(fullPath, 'utf8')).scripts ?? {};
+  } catch (error) {
+    throw new Error(`Could not parse ${packageJsonPath}: ${error.message}`);
+  }
+}
+
+function hasCommand(command) {
+  return spawnSync(command, ['--version'], { cwd: workspaceRoot, stdio: 'ignore' }).status === 0;
+}
+
+function hasAnyChangedFile(changedFiles, predicate) {
+  return changedFiles.some(predicate);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function matchesAny(repoPath, patterns) {
+  return patterns.some((pattern) => pattern.test(repoPath));
+}
+
+function shellQuote(value) {
+  return /^[A-Za-z0-9_./:@%+=,-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function formatCommand(command) {
+  const commandText = [command.command, ...command.args].map(shellQuote).join(' ');
+  if (command.cwd === workspaceRoot) {
+    return commandText;
+  }
+
+  return `cd ${shellQuote(toRepoRelative(command.cwd))} && ${commandText}`;
+}
+
+function makeCommand(label, command, args, options = {}) {
+  const task = {
+    args,
+    command,
+    cwd: options.cwd ?? workspaceRoot,
+    label,
+    reason: options.reason ?? '',
+  };
+
+  return {
+    ...task,
+    display: formatCommand(task),
+  };
+}
+
+function addCommand(commands, label, command, args, options = {}) {
+  commands.push(makeCommand(label, command, args, options));
+}
+
+function addSkip(skipped, label, reason) {
+  skipped.push({ label, reason });
+}
+
+function addFrontendScriptCommand(commands, skipped, scripts, scriptName, label, reason, extraArgs = []) {
+  if (frontendStack === 'none') {
+    return;
+  }
+
+  if (!pathExists(`${frontendDir}/package.json`)) {
+    addSkip(skipped, label, `${frontendDir}/package.json does not exist yet`);
+    return;
+  }
+
+  if (!scripts[scriptName]) {
+    addSkip(skipped, label, `${frontendDir}/package.json has no ${scriptName} script`);
+    return;
+  }
+
+  addCommand(commands, label, 'pnpm', ['--dir', frontendDir, scriptName, ...extraArgs], { reason });
+}
+
+function addPlaywrightExecCommand(commands, skipped, label, args, reason) {
+  if (!pathExists(`${frontendDir}/package.json`)) {
+    addSkip(skipped, label, `${frontendDir}/package.json does not exist yet`);
+    return;
+  }
+
+  addCommand(commands, label, 'pnpm', ['--dir', frontendDir, 'exec', 'playwright', 'test', ...args], { reason });
+}
+
+function isFrontendPath(repoPath) {
+  return frontendStack !== 'none' && repoPath.startsWith(`${frontendDir}/`);
+}
+
+function isFrontendSourceOrTestPath(repoPath) {
+  return isFrontendPath(repoPath) && /\.(astro|svelte|tsx?|jsx?|css|scss|sass)$/.test(repoPath);
+}
+
+function isFrontendTestPath(repoPath) {
+  return isFrontendPath(repoPath) && /\.(test|spec)\.(tsx?|jsx?)$/.test(repoPath);
+}
+
+function isFrontendConfigPath(repoPath) {
+  return (
+    isFrontendPath(repoPath) &&
+    /(^|\/)(package\.json|pnpm-lock\.yaml|vite\.config\.|astro\.config\.|playwright\.config\.|tsconfig)/.test(repoPath)
+  );
+}
+
+function isRustBackendPath(repoPath) {
+  return backendStack === 'rust' && (repoPath === 'Cargo.toml' || repoPath === 'Cargo.lock' || repoPath.startsWith('crates/'));
+}
+
+function isDotnetBackendPath(repoPath) {
+  return backendStack === 'dotnet' && (repoPath.startsWith('backend/') || /\.(sln|slnx)$/.test(repoPath));
+}
+
+function isGovernancePath(repoPath) {
+  return (
+    repoPath === 'AGENTS.md' ||
+    repoPath === 'README.md' ||
+    repoPath.startsWith('docs/') ||
+    repoPath.startsWith('scripts/') ||
+    repoPath.startsWith('.agents/') ||
+    repoPath.startsWith('.github/workflows/') ||
+    repoPath.startsWith('.vscode/') ||
+    repoPath === '.markdownlint-cli2.jsonc' ||
+    repoPath === 'copier.yml'
+  );
+}
+
+function isMarkdownPath(repoPath) {
+  return repoPath === 'AGENTS.md' || repoPath === 'README.md' || repoPath.endsWith('.md');
+}
+
+function isPlaywrightImpactGovernancePath(repoPath) {
+  const e2eSpecPattern = new RegExp(`^${escapeRegExp(e2eTestDir)}/.*\\.(spec|test)\\.(mjs|js|ts|tsx|jsx)$`);
+  return (
+    e2eSpecPattern.test(repoPath) ||
+    repoPath === 'scripts/playwright-impact-rules.mjs' ||
+    repoPath === 'scripts/select-playwright-impact-tests.mjs' ||
+    repoPath === 'scripts/validate-playwright-impact-tags.mjs' ||
+    repoPath === 'scripts/tests/validate-playwright-impact-tags-smoke.sh' ||
+    repoPath === 'docs/specs/playwright-e2e-impact-tags.md' ||
+    repoPath === 'docs/status/playwright-e2e-impact-tag-baseline.json'
+  );
+}
+
+function buildPlan(changedFiles, options) {
+  const commands = [];
+  const skipped = [];
+  const frontendScripts = readPackageScripts(`${frontendDir}/package.json`);
+  const frontendChanged = hasAnyChangedFile(changedFiles, isFrontendPath);
+  const frontendSourceChanged = hasAnyChangedFile(changedFiles, isFrontendSourceOrTestPath);
+  const frontendTestChanged = hasAnyChangedFile(changedFiles, isFrontendTestPath);
+  const frontendConfigChanged = hasAnyChangedFile(changedFiles, isFrontendConfigPath);
+  const rustBackendChanged = hasAnyChangedFile(changedFiles, isRustBackendPath);
+  const dotnetBackendChanged = hasAnyChangedFile(changedFiles, isDotnetBackendPath);
+  const governanceChanged = hasAnyChangedFile(changedFiles, isGovernancePath);
+  const playwrightImpactGovernanceChanged = includePlaywrightE2e && hasAnyChangedFile(changedFiles, isPlaywrightImpactGovernancePath);
+  const layeringRulesChanged = changedFiles.some(
+    (repoPath) => repoPath === 'docs/specs/architecture-layering-v0.1.md' || repoPath === 'scripts/validate-layering.mjs',
+  );
+  const contractFilesChanged = changedFiles.some(
+    (repoPath) =>
+      repoPath === apiContractPath ||
+      repoPath === frontendSchemaPath ||
+      repoPath.includes('openapi') ||
+      repoPath.includes('schema'),
+  );
+  const contractFilesExist = [apiContractPath, frontendSchemaPath].filter(Boolean).some(pathExists);
+  const markdownChanged = hasAnyChangedFile(changedFiles, isMarkdownPath);
+  const shellScriptsChanged = changedFiles.filter((repoPath) => repoPath.startsWith('scripts/') && repoPath.endsWith('.sh'));
+  const nodeScriptsChanged = changedFiles.filter((repoPath) => repoPath.startsWith('scripts/') && repoPath.endsWith('.mjs'));
+
+  if (frontendChanged || frontendSourceChanged || frontendConfigChanged) {
+    addFrontendScriptCommand(
+      commands,
+      skipped,
+      frontendScripts,
+      'format:check',
+      'frontend-format',
+      'frontend files changed',
+    );
+
+    if (frontendStack === 'astro') {
+      addFrontendScriptCommand(commands, skipped, frontendScripts, 'check', 'frontend-check', 'Astro frontend files changed');
+    } else {
+      addFrontendScriptCommand(commands, skipped, frontendScripts, 'lint', 'frontend-lint', 'frontend files changed');
+    }
+  }
+
+  if (frontendSourceChanged || frontendTestChanged) {
+    const frontendFiles = changedFiles.filter(isFrontendPath);
+    if (frontendScripts['test:related']) {
+      addFrontendScriptCommand(
+        commands,
+        skipped,
+        frontendScripts,
+        'test:related',
+        'frontend-related-tests',
+        'frontend source or tests changed',
+        ['--', ...frontendFiles],
+      );
+    } else if (frontendTestChanged) {
+      addFrontendScriptCommand(commands, skipped, frontendScripts, 'test', 'frontend-tests', 'frontend test files changed');
+    } else {
+      addSkip(skipped, 'frontend-related-tests', 'add a test:related script to select tests from changed source files');
+    }
+  }
+
+  if (playwrightImpactGovernanceChanged) {
+    if (frontendScripts['test:e2e:impact:validate']) {
+      addFrontendScriptCommand(
+        commands,
+        skipped,
+        frontendScripts,
+        'test:e2e:impact:validate',
+        'playwright-impact-tags',
+        'Playwright specs or impact governance changed',
+      );
+    } else if (pathExists('scripts/validate-playwright-impact-tags.mjs')) {
+      addCommand(commands, 'playwright-impact-tags', 'node', ['scripts/validate-playwright-impact-tags.mjs', '--strict'], {
+        reason: 'Playwright specs or impact governance changed',
+      });
+    }
+  }
+
+  if (includePlaywrightE2e && !options.skipE2e) {
+    const e2eDecision = buildDecision(changedFiles, collectE2eSpecMetadata());
+    if (e2eDecision.fullE2e) {
+      if (frontendScripts['test:e2e']) {
+        addFrontendScriptCommand(
+          commands,
+          skipped,
+          frontendScripts,
+          'test:e2e',
+          'playwright-e2e-full',
+          'changed files require full Playwright fallback',
+        );
+      } else {
+        addPlaywrightExecCommand(commands, skipped, 'playwright-e2e-full', [], 'changed files require full Playwright fallback');
+      }
+    } else {
+      if (e2eDecision.impactTags.length > 0 && e2eDecision.tagBackfillComplete) {
+        addPlaywrightExecCommand(
+          commands,
+          skipped,
+          'playwright-e2e-impact-tags',
+          ['--grep', `(${e2eDecision.impactTags.join('|')})`],
+          'run Playwright specs selected by impact tags',
+        );
+      }
+
+      if (e2eDecision.specFilters.length > 0) {
+        addPlaywrightExecCommand(
+          commands,
+          skipped,
+          'playwright-e2e-spec-files',
+          e2eDecision.specFilters,
+          'run changed or mapped Playwright spec files',
+        );
+      }
+    }
+  }
+
+  if (frontendConfigChanged) {
+    addFrontendScriptCommand(commands, skipped, frontendScripts, 'build', 'frontend-build', 'frontend build metadata changed');
+  }
+
+  if (rustBackendChanged && pathExists('Cargo.toml')) {
+    addCommand(commands, 'rust-format', 'cargo', ['fmt', '--all', '--check'], { reason: 'Rust backend files changed' });
+    addCommand(commands, 'rust-check', 'cargo', ['check', '--workspace'], { reason: 'Rust backend files changed' });
+    addCommand(commands, 'rust-tests', 'cargo', ['test', '--workspace'], { reason: 'Rust backend files changed' });
+{% if backend_stack == 'rust' %}
+    if (pathExists('scripts/check-rust-module-docs.sh')) {
+      addCommand(commands, 'rust-module-docs', './scripts/check-rust-module-docs.sh', [], { reason: 'Rust backend files changed' });
+    }
+{% endif %}
+  }
+
+  if (dotnetBackendChanged && pathExists(dotnetSolutionPath)) {
+    addCommand(commands, 'backend-format', 'dotnet', ['format', dotnetSolutionPath, '--verify-no-changes'], {
+      reason: 'backend or solution files changed',
+    });
+    addCommand(commands, 'backend-build', 'dotnet', ['build', dotnetSolutionPath], {
+      reason: 'backend or solution files changed',
+    });
+    addCommand(commands, 'backend-tests', 'dotnet', ['test', dotnetSolutionPath], {
+      reason: 'backend or solution files changed',
+    });
+  }
+
+  if (includeLayeringValidator && (rustBackendChanged || dotnetBackendChanged || frontendSourceChanged || layeringRulesChanged) && pathExists('scripts/validate-layering.mjs')) {
+    addCommand(commands, 'architecture-layering', 'node', ['scripts/validate-layering.mjs'], {
+      reason: 'source files or layering rules changed',
+    });
+  }
+
+  if (includeApiContract && (contractFilesChanged || ((rustBackendChanged || dotnetBackendChanged) && contractFilesExist)) && pathExists('scripts/check-api-contract.sh')) {
+    addCommand(commands, 'api-contract', './scripts/check-api-contract.sh', [], {
+      reason: 'API contract inputs or backend files changed',
+    });
+  }
+
+  if (governanceChanged && pathExists('scripts/validate-agent-governance.mjs')) {
+    addCommand(commands, 'agent-governance', 'node', ['scripts/validate-agent-governance.mjs'], {
+      reason: 'docs, agents, scripts, or workflows changed',
+    });
+  }
+
+  if (markdownChanged && pathExists('scripts/lint-md.sh')) {
+    addCommand(commands, 'markdown-lint', './scripts/lint-md.sh', [], { reason: 'markdown files changed' });
+  }
+
+  for (const scriptPath of nodeScriptsChanged) {
+    if (pathExists(scriptPath)) {
+      addCommand(commands, `node-syntax:${scriptPath}`, 'node', ['--check', scriptPath], {
+        reason: 'Node script changed',
+      });
+    }
+  }
+
+  for (const scriptPath of shellScriptsChanged) {
+    if (!pathExists(scriptPath)) {
+      continue;
+    }
+
+    if (hasCommand('shellcheck')) {
+      addCommand(commands, `shellcheck:${scriptPath}`, 'shellcheck', [scriptPath], {
+        reason: 'shell script changed',
+      });
+    } else {
+      addCommand(commands, `shell-syntax:${scriptPath}`, 'bash', ['-n', scriptPath], {
+        reason: 'shell script changed',
+      });
+    }
+  }
+
+  if (playwrightImpactGovernanceChanged && pathExists('scripts/tests/validate-playwright-impact-tags-smoke.sh')) {
+    addCommand(commands, 'playwright-impact-smoke', 'bash', ['scripts/tests/validate-playwright-impact-tags-smoke.sh'], {
+      reason: 'Playwright impact governance changed',
+    });
+  }
+
+  return { commands, skipped };
+}
+
+function printPlan(changedFiles, plan, options) {
+  console.log('Changed-scope validation');
+  console.log(`Changed files: ${changedFiles.length}`);
+  if (options.skipE2e) {
+    console.log('Playwright E2E execution: skipped by --skip-e2e');
+  }
+
+  if (changedFiles.length === 0) {
+    console.log('No changed files found.');
+  }
+
+  if (plan.commands.length === 0) {
+    console.log('No checks selected.');
+  } else {
+    console.log('Selected checks:');
+    for (const command of plan.commands) {
+      console.log(`- ${command.label}: ${command.display}`);
+      if (command.reason) {
+        console.log(`  reason: ${command.reason}`);
+      }
+    }
+  }
+
+  if (plan.skipped.length > 0) {
+    console.log('Skipped checks:');
+    for (const skipped of plan.skipped) {
+      console.log(`- ${skipped.label}: ${skipped.reason}`);
+    }
+  }
+}
+
+function runCommand(command) {
+  console.log(`\n==> ${command.label}`);
+  console.log(command.display);
+  const result = spawnSync(command.command, command.args, {
+    cwd: command.cwd,
+    stdio: 'inherit',
+  });
+
+  if (result.error) {
+    console.error(`${command.label}: ${result.error.message}`);
+    return 1;
+  }
+
+  return result.status ?? 1;
+}
+
+function main() {
+  let options;
+  try {
+    options = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(error.message);
+    console.error('Supported arguments: --since <git-ref>, --dry-run, --json, --skip-e2e, or explicit file paths');
+    process.exit(1);
+  }
+
+  let changedFiles;
+  let plan;
+  try {
+    changedFiles = collectChangedFiles(options);
+    plan = buildPlan(changedFiles, options);
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
+
+  if (options.json) {
+    console.log(
+      JSON.stringify(
+        {
+          changedFiles,
+          commands: plan.commands.map((command) => ({
+            args: command.args,
+            command: command.display,
+            cwd: toRepoRelative(command.cwd),
+            label: command.label,
+            reason: command.reason,
+          })),
+          dryRun: options.dryRun,
+          skipE2e: options.skipE2e,
+          skipped: plan.skipped,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  printPlan(changedFiles, plan, options);
+
+  if (options.dryRun || plan.commands.length === 0) {
+    return;
+  }
+
+  for (const command of plan.commands) {
+    const status = runCommand(command);
+    if (status !== 0) {
+      process.exit(status);
+    }
+  }
+
+  console.log('\nChanged-scope validation passed.');
+}
+
+main();

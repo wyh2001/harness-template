@@ -188,4 +188,4 @@ When adding a new architectural rule:
 1. Update this spec.
 2. Add or update validator coverage in `scripts/validate-layering.mjs`.
 3. Make validation failures actionable.
-4. Run `./scripts/finalize.sh`.
+4. Run `./scripts/validate-changed-scope.mjs`, and run `./scripts/finalize.sh` when a full gate is explicitly required.

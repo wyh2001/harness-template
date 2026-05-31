@@ -1,0 +1,270 @@
+#!/usr/bin/env node
+
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { fullE2eTriggerPatterns, impactTagRules } from './playwright-impact-rules.mjs';
+
+{% set select_frontend_dir = frontend_dir | default('frontend') -%}
+{% set select_e2e_test_dir = e2e_test_dir | default(select_frontend_dir ~ '/e2e') -%}
+const args = process.argv.slice(2);
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(scriptDir, '..');
+const frontendDir = '{{ select_frontend_dir }}';
+const e2eTestDir = '{{ select_e2e_test_dir }}';
+const e2eDir = path.join(workspaceRoot, e2eTestDir);
+const tagPattern = /@impact-[a-z0-9-]+/g;
+const specPattern = /\.(spec|test)\.(mjs|js|ts|tsx|jsx)$/;
+
+function parseArgs(argv) {
+  const parsed = {
+    json: false,
+    printCommand: false,
+    since: null,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--json') {
+      parsed.json = true;
+      continue;
+    }
+    if (arg === '--print-command') {
+      parsed.printCommand = true;
+      continue;
+    }
+    if (arg === '--since') {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error('--since requires a git ref.');
+      }
+      parsed.since = value;
+      index += 1;
+      continue;
+    }
+
+    throw new Error(`Unknown argument '${arg}'.`);
+  }
+
+  return parsed;
+}
+
+function runGit(argsForGit) {
+  try {
+    return execFileSync('git', argsForGit, {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return '';
+  }
+}
+
+export function collectChangedFiles(since) {
+  const diffArgs = ['diff', '--name-only', '--diff-filter=ACMRT'];
+  diffArgs.push(since ?? 'HEAD');
+
+  const trackedChanges = runGit(diffArgs).split(/\r?\n/);
+  const stagedChanges = runGit(['diff', '--name-only', '--cached', '--diff-filter=ACMRT']).split(/\r?\n/);
+  const untrackedChanges = runGit(['ls-files', '--others', '--exclude-standard']).split(/\r?\n/);
+
+  return [...new Set([...trackedChanges, ...stagedChanges, ...untrackedChanges])]
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort();
+}
+
+function matchesAnyPattern(relativePath, patterns) {
+  return patterns.some((pattern) => pattern.test(relativePath));
+}
+
+function walkE2eSpecs(directoryPath) {
+  if (!fs.existsSync(directoryPath)) {
+    return [];
+  }
+
+  const specs = [];
+  for (const entry of fs.readdirSync(directoryPath, { withFileTypes: true })) {
+    const entryPath = path.join(directoryPath, entry.name);
+    if (entry.isDirectory()) {
+      specs.push(...walkE2eSpecs(entryPath));
+      continue;
+    }
+
+    if (entry.isFile() && specPattern.test(entry.name)) {
+      specs.push(entryPath);
+    }
+  }
+
+  return specs.sort((left, right) => left.localeCompare(right));
+}
+
+function toRepoRelative(fullPath) {
+  return path.relative(workspaceRoot, fullPath).replaceAll(path.sep, '/');
+}
+
+function toFrontendPath(repoRelativePath) {
+  return repoRelativePath.startsWith(`${frontendDir}/`) ? repoRelativePath.slice(`${frontendDir}/`.length) : repoRelativePath;
+}
+
+function extractImpactTags(content) {
+  return [...new Set(content.match(tagPattern) ?? [])].sort();
+}
+
+export function collectE2eSpecMetadata() {
+  return walkE2eSpecs(e2eDir).map((filePath) => {
+    const repoPath = toRepoRelative(filePath);
+    return {
+      frontendPath: toFrontendPath(repoPath),
+      repoPath,
+      tags: extractImpactTags(fs.readFileSync(filePath, 'utf8')),
+    };
+  });
+}
+
+function shellQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+export function buildDecision(changedFiles, e2eSpecs) {
+  const impactTags = new Set();
+  const specFilters = new Set();
+  const reasons = [];
+  let fullE2e = false;
+
+  for (const changedFile of changedFiles) {
+    if (changedFile.startsWith(`${e2eTestDir}/`) && specPattern.test(changedFile)) {
+      specFilters.add(toFrontendPath(changedFile));
+      reasons.push(`${changedFile}: changed Playwright spec`);
+      continue;
+    }
+
+    if (matchesAnyPattern(changedFile, fullE2eTriggerPatterns)) {
+      fullE2e = true;
+      reasons.push(`${changedFile}: full-E2E trigger`);
+      continue;
+    }
+
+    let matchedImpactRule = false;
+    for (const rule of impactTagRules) {
+      if (matchesAnyPattern(changedFile, rule.sourcePatterns ?? [])) {
+        matchedImpactRule = true;
+        impactTags.add(rule.tag);
+        reasons.push(`${changedFile}: selects ${rule.tag}`);
+      }
+    }
+
+    if (changedFile.startsWith(`${frontendDir}/src/`) && !matchedImpactRule) {
+      fullE2e = true;
+      reasons.push(`${changedFile}: unmatched frontend source path`);
+    }
+  }
+
+  const sortedImpactTags = [...impactTags].sort();
+  const commands = [];
+  let tagBackfillComplete = true;
+
+  if (!fullE2e && sortedImpactTags.length > 0) {
+    for (const tag of sortedImpactTags) {
+      const rule = impactTagRules.find((candidate) => candidate.tag === tag);
+      const matchingSpecs = e2eSpecs.filter((spec) => (rule ? matchesAnyPattern(spec.repoPath, rule.e2ePatterns ?? []) : false));
+
+      if (matchingSpecs.length === 0) {
+        fullE2e = true;
+        reasons.push(`${tag}: no matching Playwright specs; using full E2E`);
+        break;
+      }
+
+      const untaggedMatchingSpecs = matchingSpecs.filter((spec) => !spec.tags.includes(tag));
+      if (untaggedMatchingSpecs.length > 0) {
+        tagBackfillComplete = false;
+        for (const spec of matchingSpecs) {
+          specFilters.add(spec.frontendPath);
+        }
+        reasons.push(`${tag}: tag backfill incomplete; selecting mapped spec files`);
+      }
+    }
+  }
+
+  const sortedSpecFilters = [...specFilters].sort();
+
+  if (fullE2e) {
+    commands.push(`cd ${shellQuote(frontendDir)} && npx playwright test`);
+  } else {
+    if (sortedImpactTags.length > 0 && tagBackfillComplete) {
+      const grepPattern = `(${sortedImpactTags.join('|')})`;
+      commands.push(`cd ${shellQuote(frontendDir)} && npx playwright test --grep ${shellQuote(grepPattern)}`);
+    }
+
+    if (sortedSpecFilters.length > 0) {
+      commands.push(`cd ${shellQuote(frontendDir)} && npx playwright test ${sortedSpecFilters.map(shellQuote).join(' ')}`);
+    }
+  }
+
+  return {
+    changedFiles,
+    commands,
+    fullE2e,
+    impactTags: sortedImpactTags,
+    mode: commands.length === 0 ? 'none' : fullE2e ? 'full-e2e' : 'scoped-e2e',
+    reasons,
+    specFilters: sortedSpecFilters,
+    tagBackfillComplete,
+  };
+}
+
+function printHuman(decision) {
+  console.log(`Playwright impact mode: ${decision.mode}`);
+  if (decision.changedFiles.length === 0) {
+    console.log('No changed files found.');
+    return;
+  }
+
+  console.log(`Changed files: ${decision.changedFiles.length}`);
+  for (const reason of decision.reasons) {
+    console.log(`- ${reason}`);
+  }
+
+  if (decision.commands.length === 0) {
+    console.log('No Playwright command selected.');
+    return;
+  }
+
+  console.log('Selected command(s):');
+  for (const command of decision.commands) {
+    console.log(command);
+  }
+}
+
+function main() {
+  let options;
+  try {
+    options = parseArgs(args);
+  } catch (error) {
+    console.error(error.message);
+    console.error('Supported arguments: --since <git-ref>, --json, --print-command');
+    process.exit(1);
+  }
+
+  const decision = buildDecision(collectChangedFiles(options.since), collectE2eSpecMetadata());
+
+  if (options.json) {
+    console.log(JSON.stringify(decision, null, 2));
+    return;
+  }
+
+  if (options.printCommand) {
+    for (const command of decision.commands) {
+      console.log(command);
+    }
+    return;
+  }
+
+  printHuman(decision);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}

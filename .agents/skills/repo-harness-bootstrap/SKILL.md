@@ -1,6 +1,6 @@
 ---
 name: repo-harness-bootstrap
-description: "Bootstrap a new repository with an agent-legible harness: short AGENTS.md entrypoint, progressive docs/specs/decisions/tasks, check-only finalize script, scaffold planning, DTO/source-of-truth guidance, layer-direction rules, maintainability checks, and explicit Playwright E2E evaluation. Use when creating a fresh repo or applying the harness-template Copier project before the project-specific architecture settles."
+description: "Bootstrap a new repository with an agent-legible harness: short AGENTS.md entrypoint, progressive docs/specs/decisions/tasks, mandatory changed-scope validation, check-only full finalization, scaffold planning, DTO/source-of-truth guidance, layer-direction rules, maintainability checks, and explicit Playwright E2E evaluation. Use when creating a fresh repo or applying the harness-template Copier project before the project-specific architecture settles."
 ---
 
 # Repo Harness Bootstrap
@@ -48,7 +48,9 @@ Create these entry points:
 - `docs/decisions/`: short ADR-style rationale.
 - `docs/tasks/`: repeatable workflows, especially scaffold planning, schema
   generation, alignment checks, and E2E testing when a frontend exists.
-- `scripts/finalize.sh`: final check-only gate.
+- `./scripts/validate-changed-scope.mjs`: mandatory local completion check.
+- `./scripts/validate-agent-governance.mjs`: agent-facing docs alignment check.
+- `./scripts/finalize.sh`: check-only CI/pre-merge full gate.
 - runtime feedback scripts such as `scripts/dev.sh`, `scripts/check-health.sh`,
   and `scripts/smoke.sh` when the selected stack can support them.
 
@@ -108,11 +110,15 @@ Typical checks:
 - architecture-layer validator for dependency direction and direct `fetch` in
   UI files.
 - 300-line hand-written product source file check.
-- Playwright `test:e2e` in `finalize.sh` and CI after frontend startup and at
-  least one stable journey exist.
+- Playwright impact rules through `./scripts/playwright-impact-rules.mjs`,
+  validation through `./scripts/validate-playwright-impact-tags.mjs`, and
+  selection through `./scripts/select-playwright-impact-tests.mjs`, with
+  `test:e2e` in `./scripts/finalize.sh` and CI after frontend startup and at least one
+  stable journey exist.
 
-`finalize.sh` must remain check-only and should not start long-running dev
-servers. Keep startup smoke checks separate.
+`./scripts/validate-changed-scope.mjs` is mandatory before local implementation
+work is marked complete. `./scripts/finalize.sh` must remain check-only and
+should not start long-running dev servers. Keep startup smoke checks separate.
 
 ## Validation
 
@@ -123,5 +129,7 @@ After bootstrapping:
 3. Run syntax checks for shell and Node scripts when present.
 4. Run generated `validate-layering.mjs` directly when it does not require
    missing app files.
-5. Do not run full stack checks until the selected stack has been scaffolded.
-6. Report deferred checks with concrete activation criteria.
+5. Run `./scripts/validate-changed-scope.mjs` when the generated repo has enough
+   scaffolded files for it to select meaningful checks.
+6. Do not run full stack checks until the selected stack has been scaffolded.
+7. Report deferred checks with concrete activation criteria.

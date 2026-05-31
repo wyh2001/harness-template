@@ -14,11 +14,12 @@ Common commands:
 
 ```bash
 ./scripts/format.sh
+./scripts/validate-changed-scope.mjs
 ./scripts/finalize.sh
 ./scripts/dev.sh
 ./scripts/smoke.sh
 ```
 
-`finalize.sh` is check-only. It should not modify files.
+`validate-changed-scope.mjs` is the mandatory local completion check. `finalize.sh` is the check-only CI/pre-merge full gate and should not modify files.
 
-Before scaffolding a new stack or feature, read `docs/tasks/scaffold-planning.md` and keep layer direction, DTO ownership, and validation timing explicit.
+Before scaffolding a new stack or feature, read `docs/tasks/scaffold-planning.md` and keep layer direction, DTO ownership, and validation timing explicit. For Playwright E2E, use project impact rules plus the dedicated validator and selector scripts rather than a template-wide fixed tag list.

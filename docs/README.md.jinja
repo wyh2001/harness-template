@@ -16,17 +16,22 @@ When changing specs, decisions, generated contracts, or code, keep the affected 
 
 When checking whether docs, generated contracts, scripts, and code still align, use [Alignment Check Task](./tasks/alignment-check.md).
 
+Before marking local implementation work complete, run `./scripts/validate-changed-scope.mjs`. Use `./scripts/finalize.sh` for CI, pre-merge, or explicit full finalization.
+
 Before scaffolding a backend, frontend, feature slice, or validation gate, use [Scaffold Planning Task](./tasks/scaffold-planning.md).
 
 When backend API shapes change, use [Schema Generation Task](./tasks/schema-generation.md).
 {% if frontend_stack != 'none' %}
-When a frontend exists, explicitly evaluate Playwright E2E with [E2E Testing Task](./tasks/e2e-testing.md). Enable it when stable user journeys exist; otherwise record the deferral reason.
+When a frontend exists, explicitly evaluate Playwright E2E with [E2E Testing Task](./tasks/e2e-testing.md) and [Playwright E2E Impact Tags](./specs/playwright-e2e-impact-tags.md). Enable it when stable user journeys exist; otherwise record the deferral reason.
 {% endif %}
 ## Specs
 
 - [{{ main_spec_title }}](./specs/{{ main_spec_slug }}-v0.1.md) - Product scope and intended current behavior.
 - [Architecture Layering v0.1](./specs/architecture-layering-v0.1.md) - Layer ownership, dependency direction, and enforcement progress.
 - [Agent Governance v0.1](./specs/agent-governance-v0.1.md) - Repository harness, comment policy, generated artifacts, and validation principles.
+{% if frontend_stack != 'none' -%}
+- [Playwright E2E Impact Tags](./specs/playwright-e2e-impact-tags.md) - Impact-tag rule, validator, and selector contract for scoped local E2E checks.
+{% endif -%}
 
 ## Decisions
 

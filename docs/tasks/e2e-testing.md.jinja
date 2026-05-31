@@ -11,11 +11,13 @@ Use Playwright for browser-level checks of the highest-value user journeys once 
 Any project with a frontend should make an explicit E2E decision. If the app has stable browser-visible journeys, install Playwright and add a `test:e2e` gate. If it does not, record the deferral reason in scaffold planning instead of silently skipping E2E.
 
 {% if include_playwright_e2e | default(false) -%}
-Playwright is enabled in the harness. `./scripts/finalize.sh` runs:
+Playwright is enabled in the harness. `./scripts/finalize.sh` runs the full E2E gate:
 
 ```bash
 pnpm --dir {{ e2e_frontend_dir }} test:e2e
 ```
+
+Local changed-scope validation may run a tagged subset selected by `scripts/select-playwright-impact-tests.mjs` and project rules from `scripts/playwright-impact-rules.mjs`.
 
 Expected project files:
 
@@ -37,14 +39,22 @@ Playwright is not wired into `finalize.sh` yet. Treat that as a deferred decisio
    - CI guards such as `forbidOnly`, retries, and a stable reporter.
 5. Keep E2E data deterministic. Prefer API-level setup or test fixtures over relying on shared staging data.
 6. Cover only stable, user-visible journeys. Do not turn every component or edge case into E2E coverage.
-7. When E2E becomes required, set `include_playwright_e2e=true` in the template answers or wire the same command into `scripts/finalize.sh` and CI.
+7. Tag every E2E spec with one or more project-defined `@impact-*` tags backed by `scripts/playwright-impact-rules.mjs`.
+8. Add or update `scripts/playwright-impact-rules.mjs` when a new impact area or source-to-E2E mapping is needed.
+9. Add a frontend `test:e2e:impact:validate` script that runs the impact validator, for example `node ../scripts/validate-playwright-impact-tags.mjs --strict` when the frontend lives one directory below the repo root.
+10. When E2E becomes required, set `include_playwright_e2e=true` in the template answers or wire the same command into `scripts/finalize.sh` and CI.
 
 ## Maintenance Rules
 
+- The harness template does not define a universal impact-tag taxonomy; each project defines its own tags and mappings in `scripts/playwright-impact-rules.mjs`.
+- `scripts/validate-playwright-impact-tags.mjs` validates known tags, missing tags, stale baseline entries, and invalid tag-to-spec usage.
+- `scripts/select-playwright-impact-tests.mjs` maps changed files to full E2E, tagged subsets, mapped spec files, or no E2E command.
 - Tests should navigate like a user and assert visible outcomes.
+- Every spec must carry one or more project-defined `@impact-*` tags.
 - Avoid sleeps and timing guesses; rely on Playwright locators and web-first assertions.
 - Keep test files at or below the project 300-line product-source limit by splitting journeys or fixtures.
 - Store traces, screenshots, and videos as transient test artifacts, not committed files.
+- Scoped E2E is an iteration accelerator, not proof of full release readiness.
 
 ## Output
 
@@ -54,4 +64,5 @@ Report:
 - user journeys covered.
 - startup command and base URL used by Playwright.
 - data setup/teardown strategy.
+- impact tags and source-to-E2E mapping changed.
 - checks run.

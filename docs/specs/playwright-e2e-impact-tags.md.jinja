@@ -1,0 +1,135 @@
+# Playwright E2E Impact Tags
+
+## Scope
+
+Local frontend iteration needs a deterministic way to run the smallest relevant Playwright E2E subset. Full finalization remains the exhaustive CI and pre-merge gate; scoped E2E is only a local iteration accelerator.
+
+Playwright cannot infer impact from frontend import graphs the way Vitest can. This project therefore uses explicit `@impact-*` tags and a source-path-to-E2E mapping.
+
+## Terms
+
+- TERM-E2E-IMPACT-TAG: A Playwright tag beginning with `@impact-`.
+- TERM-E2E-IMPACT-RULE: A rule in `scripts/playwright-impact-rules.mjs` that maps source path patterns to one impact tag and maps that tag to the E2E specs that may carry it.
+- TERM-E2E-TAG-RATCHET: Validation mode that permits only the current documented untagged-spec baseline and rejects newly added untagged specs.
+- TERM-E2E-TAG-STRICT: Validation mode that requires every E2E spec to carry at least one known impact tag.
+- TERM-SCOPED-CHECK: A local development check path selected from changed files. It does not replace CI or explicit full finalization.
+
+## Script Contract
+
+`scripts/playwright-impact-rules.mjs` is the project-owned rule file. The harness template does not define universal allowed tags.
+
+Each rule has this shape:
+
+```js
+{
+  tag: '@impact-example',
+  description: 'User-facing workflow area.',
+  sourcePatterns: [new RegExp('^{{ frontend_dir | default('frontend') }}/src/features/example/')],
+  e2ePatterns: [new RegExp('^{{ e2e_test_dir | default((frontend_dir | default('frontend')) ~ '/e2e') }}/example-.*\\.spec\\.ts$')],
+}
+```
+
+`scripts/validate-playwright-impact-tags.mjs` validates the rule file and E2E specs:
+
+```bash
+node scripts/validate-playwright-impact-tags.mjs --report
+node scripts/validate-playwright-impact-tags.mjs --ratchet
+node scripts/validate-playwright-impact-tags.mjs --strict
+```
+
+`scripts/select-playwright-impact-tests.mjs` maps changed files to an E2E decision:
+
+```bash
+node scripts/select-playwright-impact-tests.mjs --json
+node scripts/select-playwright-impact-tests.mjs --print-command
+node scripts/select-playwright-impact-tests.mjs --since origin/main
+```
+
+`./scripts/validate-changed-scope.mjs` consumes the selector decision and runs the selected local checks.
+
+## Functional Requirements
+
+### REQ-E2EIMPACT-001: Project-Owned Tags
+
+Every active Playwright E2E spec must carry one or more project-defined `@impact-*` tags.
+
+Acceptance criteria:
+
+- AC-E2EIMPACT-001-01: Tags are declared by project rules, not by a template-wide fixed list.
+- AC-E2EIMPACT-001-02: Unknown `@impact-*` tags fail validation.
+- AC-E2EIMPACT-001-03: A spec using a known tag outside that tag's `e2ePatterns` fails validation.
+
+### REQ-E2EIMPACT-002: Impact Validation
+
+The repository must support report, ratchet, and strict validation modes.
+
+Acceptance criteria:
+
+- AC-E2EIMPACT-002-01: `--report` prints current E2E specs and their impact tags.
+- AC-E2EIMPACT-002-02: `--ratchet` rejects newly added untagged specs unless they are intentionally in `docs/status/playwright-e2e-impact-tag-baseline.json`.
+- AC-E2EIMPACT-002-03: `--strict` rejects every untagged E2E spec.
+- AC-E2EIMPACT-002-04: Stale baseline entries fail validation.
+- AC-E2EIMPACT-002-05: Strict mode rejects any rule whose mapped specs do not carry that rule's tag.
+
+### REQ-E2EIMPACT-003: Changed-File Selection
+
+The selector must map changed files to one of:
+
+- no E2E command.
+- mapped spec-file filters.
+- tagged Playwright subset through `--grep`.
+- full E2E fallback.
+
+Acceptance criteria:
+
+- AC-E2EIMPACT-003-01: Changed E2E spec files select those spec files directly.
+- AC-E2EIMPACT-003-02: Changed frontend source files matching `sourcePatterns` select the matching impact tag.
+- AC-E2EIMPACT-003-03: Changed frontend source files under `{{ frontend_dir | default('frontend') }}/src/` that match no rule fall back to full E2E.
+- AC-E2EIMPACT-003-04: Playwright config and frontend dependency metadata changes fall back to full E2E.
+- AC-E2EIMPACT-003-05: JSON output is deterministic for automation.
+
+### REQ-E2EIMPACT-004: Local Changed-Scope Integration
+
+Changed-scope validation must use the selector for Playwright E2E instead of hardcoding a template tag taxonomy.
+
+Acceptance criteria:
+
+- AC-E2EIMPACT-004-01: `./scripts/validate-changed-scope.mjs --dry-run --json` emits a machine-readable command plan.
+- AC-E2EIMPACT-004-02: Backend checks are skipped when no backend or solution files changed.
+- AC-E2EIMPACT-004-03: Full Playwright E2E is skipped when a narrower tagged or spec-file subset is selected.
+- AC-E2EIMPACT-004-04: `./scripts/finalize.sh` still runs strict impact-tag validation and the full E2E gate when Playwright E2E is enabled.
+
+## Tagging Rules
+
+Preferred style:
+
+```ts
+test.describe('example workflow', { tag: '@impact-example' }, () => {
+  // tests
+});
+```
+
+Multiple tags are allowed:
+
+```ts
+test.describe(
+  'workflow crossing areas',
+  { tag: ['@impact-example', '@impact-settings'] },
+  () => {
+    // tests
+  },
+);
+```
+
+Rules:
+
+- Use the narrowest correct impact tag or tags.
+- Do not invent tags in specs; add a project rule first.
+- Do not add broad tags only to make validation pass.
+- Keep source patterns conservative. When uncertain, select broader E2E coverage rather than under-selecting.
+
+## Smoke Fixtures
+
+Governance smoke tests for impact tags must use minimal fixtures.
+
+Do not copy the full repository into a temp directory. Copy only the scripts, baseline file, and minimal source/spec files needed for the smoke case.

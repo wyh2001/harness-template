@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-The project needs repeatable local decisions for agent guidance, docs layout, final validation, runtime smoke checks, generated artifacts, and architecture boundaries.
+The project needs repeatable local decisions for agent guidance, docs layout, local and full validation, runtime smoke checks, generated artifacts, and architecture boundaries.
 
 Without a repository-local harness, the same preferences get rediscovered in chat or reconstructed in ad hoc scripts. Agent-generated projects especially need early decisions for layer direction, DTO ownership, maintainability limits, and which checks are active now versus deferred until the stack exists.
 
@@ -21,6 +21,7 @@ The core harness files are:
 - `docs/tasks/alignment-check.md`
 - `docs/tasks/scaffold-planning.md`
 - `docs/tasks/e2e-testing.md`
+- `scripts/validate-changed-scope.mjs`
 - `scripts/finalize.sh`
 - `scripts/dev.sh`
 - `scripts/smoke.sh`
@@ -29,6 +30,7 @@ The core harness files are:
 
 - Durable project knowledge belongs in repository docs, not only chat history.
 - Repeated conventions should become mechanical checks when practical.
-- `finalize.sh` is the final local gate and must remain check-only.
+- `validate-changed-scope.mjs` is the mandatory local completion gate.
+- `finalize.sh` is the CI/pre-merge full gate and must remain check-only.
 - Runtime smoke checks stay separate from finalization because they start services and require free ports.
 - Some rules should be documented before scaffolding but mechanically enabled only after their target stack exists.

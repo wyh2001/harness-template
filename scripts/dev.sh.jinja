@@ -43,11 +43,10 @@ wait_for_text() {
   local label="$1"
   local url="$2"
   local expected="$3"
-  local attempt
 
   printf 'Waiting for %s: %s\n' "${label}" "${url}"
 
-  for attempt in {1..60}; do
+  for _ in {1..60}; do
     check_children_alive
 
     if curl --fail --silent "${url}" | grep --quiet "${expected}"; then

@@ -58,6 +58,19 @@
 {% endif %}
 {% if include_playwright_e2e | default(false) %}
     {
+      "label": "test:e2e:impact:validate",
+      "type": "shell",
+      "command": "node scripts/validate-playwright-impact-tags.mjs --strict",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
       "label": "test:e2e",
       "type": "shell",
       "command": "pnpm --dir {{ frontend_dir }} test:e2e",
@@ -71,6 +84,20 @@
       }
     },
 {% endif %}
+    {
+      "label": "validate changed scope",
+      "type": "shell",
+      "command": "./scripts/validate-changed-scope.mjs",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": {% if backend_stack == 'rust' %}["$rustc"]{% else %}[]{% endif %},
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
     {
       "label": "finalize",
       "type": "shell",

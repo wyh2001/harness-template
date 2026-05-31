@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+{% set smoke_frontend_dir = frontend_dir | default('frontend') -%}
+{% set smoke_e2e_test_dir = e2e_test_dir | default(smoke_frontend_dir ~ '/e2e') -%}
+{% set smoke_frontend_dir_regex = smoke_frontend_dir | replace('/', '\\/') -%}
+{% set smoke_e2e_test_dir_regex = smoke_e2e_test_dir | replace('/', '\\/') -%}
+REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+TEMP_DIRS=()
+
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
+}
+
+cleanup() {
+  set +u
+  rm -rf -- "${TEMP_DIRS[@]}"
+  set -u
+}
+
+trap cleanup EXIT
+
+run_capture() {
+  local result_var="$1"
+  shift
+
+  local command_output status
+  set +e
+  command_output="$("$@" 2>&1)"
+  status=$?
+  set -e
+
+  printf -v "${result_var}" '%s' "${command_output}"
+  return "${status}"
+}
+
+assert_contains() {
+  local output="$1"
+  local expected="$2"
+
+  if [[ "${output}" != *"${expected}"* ]]; then
+    fail "expected output to contain: ${expected}"
+  fi
+}
+
+create_workspace_fixture() {
+  local workspace_dir
+  workspace_dir="$(mktemp -d)"
+  TEMP_DIRS+=("${workspace_dir}")
+
+  mkdir -p \
+    "${workspace_dir}/docs/status" \
+    "${workspace_dir}/{{ smoke_e2e_test_dir }}" \
+    "${workspace_dir}/{{ smoke_frontend_dir }}/src/features/export" \
+    "${workspace_dir}/scripts"
+
+  cp \
+    "${REPO_ROOT}/docs/status/playwright-e2e-impact-tag-baseline.json" \
+    "${workspace_dir}/docs/status/playwright-e2e-impact-tag-baseline.json"
+  cp \
+    "${REPO_ROOT}/scripts/playwright-impact-rules.mjs" \
+    "${REPO_ROOT}/scripts/select-playwright-impact-tests.mjs" \
+    "${REPO_ROOT}/scripts/validate-playwright-impact-tags.mjs" \
+    "${workspace_dir}/scripts/"
+
+  cat >"${workspace_dir}/scripts/playwright-impact-rules.mjs" <<'RULES'
+export const impactTagRules = [
+  {
+    tag: '@impact-export',
+    description: 'Export flow.',
+    sourcePatterns: [/^{{ smoke_frontend_dir_regex }}\/src\/features\/export\//],
+    e2ePatterns: [/^{{ smoke_e2e_test_dir_regex }}\/export-.*\.spec\.ts$/],
+  },
+];
+
+export const fullE2eTriggerPatterns = [/^{{ smoke_frontend_dir_regex }}\/playwright\.config\./];
+RULES
+
+  cat >"${workspace_dir}/{{ smoke_e2e_test_dir }}/export-flow.spec.ts" <<'SPEC'
+import { test } from '@playwright/test';
+
+test.describe('export flow', { tag: '@impact-export' }, () => {
+  test('exports', async () => {});
+});
+SPEC
+
+  cat >"${workspace_dir}/{{ smoke_frontend_dir }}/src/features/export/exportFeature.ts" <<'SOURCE'
+export const exportFeature = true;
+SOURCE
+
+  git -C "${workspace_dir}" init --quiet
+  git -C "${workspace_dir}" add -A
+  git -C "${workspace_dir}" \
+    -c user.name="Smoke Test" \
+    -c user.email="smoke@example.invalid" \
+    commit -m "smoke baseline" >/dev/null
+
+  printf '%s\n' "${workspace_dir}"
+}
+
+write_file() {
+  local target_file="$1"
+  local content="$2"
+  node -e 'const fs = require("node:fs");
+const filePath = process.argv[1];
+const content = process.argv[2];
+fs.writeFileSync(filePath, content, "utf8");' "${target_file}" "${content}"
+}
+
+workspace="$(create_workspace_fixture)"
+if ! run_capture output bash -c "cd \"${workspace}\" && node scripts/validate-playwright-impact-tags.mjs --strict"; then
+  fail "expected strict Playwright impact validation to pass"
+fi
+assert_contains "${output}" "Playwright impact tag strict validation passed"
+
+workspace="$(create_workspace_fixture)"
+write_file \
+  "${workspace}/{{ smoke_e2e_test_dir }}/export-untagged.spec.ts" \
+  "import { test } from '@playwright/test';
+test('new untagged spec', async () => {});"
+if run_capture output bash -c "cd \"${workspace}\" && node scripts/validate-playwright-impact-tags.mjs --strict"; then
+  fail "expected strict validation to fail for an untagged E2E spec"
+fi
+assert_contains "${output}" "missing required @impact-* Playwright tag"
+
+workspace="$(create_workspace_fixture)"
+write_file \
+  "${workspace}/{{ smoke_e2e_test_dir }}/export-unknown.spec.ts" \
+  "import { test } from '@playwright/test';
+test.describe('unknown impact', { tag: '@impact-unknown' }, () => {
+  test('uses an unknown tag', async () => {});
+});"
+if run_capture output bash -c "cd \"${workspace}\" && node scripts/validate-playwright-impact-tags.mjs --strict"; then
+  fail "expected strict validation to fail for an unknown impact tag"
+fi
+assert_contains "${output}" "unknown Playwright impact tag '@impact-unknown'"
+
+workspace="$(create_workspace_fixture)"
+if ! run_capture output bash -c "cd \"${workspace}\" && echo '// change' >> {{ smoke_frontend_dir }}/src/features/export/exportFeature.ts && node scripts/select-playwright-impact-tests.mjs --json"; then
+  fail "expected selector to succeed for an impact-mapped source change"
+fi
+assert_contains "${output}" "\"@impact-export\""
+assert_contains "${output}" "\"mode\": \"scoped-e2e\""
+assert_contains "${output}" "npx playwright test --grep"
+
+workspace="$(create_workspace_fixture)"
+mkdir -p "${workspace}/{{ smoke_frontend_dir }}/src/unmapped"
+write_file "${workspace}/{{ smoke_frontend_dir }}/src/unmapped/source.ts" "export const source = true;"
+if ! run_capture output bash -c "cd \"${workspace}\" && node scripts/select-playwright-impact-tests.mjs --json"; then
+  fail "expected selector to succeed for an unmapped source change"
+fi
+assert_contains "${output}" "\"mode\": \"full-e2e\""
+
+echo "validate-playwright-impact-tags smoke test passed."

@@ -59,7 +59,9 @@ The repository harness includes:
 {% if include_layering_validator -%}
 - Architecture layering and 300-line hand-written product source file checks through `scripts/validate-layering.mjs`.
 {% endif -%}
-- `scripts/finalize.sh` as the check-only final gate.
+- `scripts/validate-changed-scope.mjs` as the mandatory local completion check.
+- `scripts/validate-agent-governance.mjs` to keep agent-facing docs aligned with the local completion rule.
+- `scripts/finalize.sh` as the check-only CI/pre-merge full gate.
 
 Future checks should be added when a rule becomes repeated, easy to forget, or important for agent legibility.
 
@@ -67,7 +69,42 @@ Checks that depend on real application structure should be staged. Decide the de
 
 Formatting and generation must converge: if a formatter and generator keep changing the same generated file back and forth, exclude that generated path from formatter globs, post-format during generation, or make the generator emit formatter-stable output.
 
-## 4. Documentation Style
+## 4. Validation Policy
+
+Run the most relevant checks for the changed scope.
+
+Before marking implementation work complete, running `./scripts/validate-changed-scope.mjs` is mandatory for local development.
+
+Use `./scripts/finalize.sh` only for CI, pre-merge full-gate validation, or an explicit request for full finalization.
+
+### Local Changed-Scope Validation
+
+Use:
+
+```bash
+./scripts/validate-changed-scope.mjs
+```
+
+The script selects checks from changed files, including:
+
+- formatting/lint for changed frontend files.
+- related frontend tests where possible.
+- Playwright E2E subsets selected by impact tags.
+- backend checks only when backend or solution files changed.
+- Rust checks only when Rust workspace files changed.
+- docs/governance checks only when docs, agents, scripts, or workflows changed.
+
+### Full Finalization
+
+Use:
+
+```bash
+./scripts/finalize.sh
+```
+
+This remains the exhaustive CI/pre-merge gate and should not be optimized into a changed-scope shortcut.
+
+## 5. Documentation Style
 
 Docs should be indexed, cross-linked, and scoped.
 
@@ -86,7 +123,7 @@ Avoid:
 - unlinked specs.
 - rules that exist only in chat history.
 
-## 5. Code Comment Policy
+## 6. Code Comment Policy
 
 Comments are for agent legibility and maintenance boundaries, not for narrating code.
 
@@ -106,7 +143,7 @@ Avoid comments that:
 {% if backend_stack == 'rust' -%}
 Rust source files under `crates/` must start with a module-level `//!` comment. The comment should explain the module's boundary, layer, or reason to exist in one short sentence. This is enforced by `scripts/check-rust-module-docs.sh`.
 {% endif %}
-## 6. Layering Policy
+## 7. Layering Policy
 
 Layering rules should describe dependency direction and ownership, not ceremony.
 
@@ -117,7 +154,7 @@ Before adding a new rule:
 1. Write the rule in `docs/specs/architecture-layering-v0.1.md`.
 2. Decide whether the rule is guidance, planned enforcement, or enforced.
 3. Add mechanical enforcement only when the failure can be explained clearly.
-4. Wire the check into `scripts/finalize.sh` when it is stable and cheap enough.
+4. Wire the check into `scripts/validate-changed-scope.mjs` for relevant local changes and into `scripts/finalize.sh` when it is stable enough for the full gate.
 
 Custom validation errors should say both what failed and where the code should go instead.
 
@@ -133,13 +170,13 @@ Avoid vague failure shape:
 invalid architecture
 ```
 
-## 7. Maintainability Invariants
+## 8. Maintainability Invariants
 
 Hand-written product source files should stay at or below 300 lines. Split by feature, layer, route, component, helper, fixture, or test journey before exceeding that limit.
 
 Generated files, lockfiles, build output, harness scripts, and package-manager output are exempt. If a generated file becomes a repeated editing target, replace that workflow with a smaller generated surface or a checked-in source template.
 
-## 8. Schema Generation Policy
+## 9. Schema Generation Policy
 
 Treat generated schemas and contracts as project memory.
 
@@ -150,13 +187,13 @@ When backend API shapes change:
 2. Run `./scripts/generate-api-contract.sh`.
 3. Review the OpenAPI and frontend type diff.
 4. Commit generated artifacts with the behavioral change.
-5. Run `./scripts/check-api-contract.sh` or `./scripts/finalize.sh`.
+5. Run `./scripts/check-api-contract.sh`, `./scripts/validate-changed-scope.mjs`, or `./scripts/finalize.sh` when full finalization is required.
 
 Frontend code should import generated API types instead of copying backend DTOs by hand.
 {% else -%}
 When this project gains generated schemas, choose the DTO/source-of-truth strategy, add a generation script, add a freshness check, and update the schema task before relying on the generated output in feature code.
 {% endif %}
-## 9. E2E Policy
+## 10. E2E Policy
 
 {% if frontend_stack != 'none' -%}
 Frontend projects must explicitly evaluate Playwright E2E. Use Playwright for stable browser-level user journeys after the frontend can start reliably. E2E tests should protect important workflows, not duplicate unit or component tests.
@@ -171,9 +208,30 @@ Before making E2E required:
 1. Add a Playwright config with a local `baseURL` and `webServer`.
 2. Add a frontend `test:e2e` script.
 3. Make data setup deterministic.
-4. Add the E2E command to `scripts/finalize.sh` and CI, or enable `include_playwright_e2e` in the template answers.
+4. Add project impact rules through `scripts/playwright-impact-rules.mjs`, validate them with `scripts/validate-playwright-impact-tags.mjs`, and select local E2E subsets with `scripts/select-playwright-impact-tests.mjs`.
+5. Add the E2E command to `scripts/finalize.sh` and CI, or enable `include_playwright_e2e` in the template answers.
 
-## 10. Change Discipline
+The harness template does not define a universal E2E impact taxonomy. Each project defines its own impact areas in `scripts/playwright-impact-rules.mjs`.
+
+Every Playwright E2E spec must carry one or more project-defined `@impact-*` tags backed by `scripts/playwright-impact-rules.mjs`.
+
+When adding or changing E2E coverage:
+
+- tag the spec with the narrowest correct impact area.
+- update `scripts/playwright-impact-rules.mjs` when adding a new project impact area or changing source-to-E2E mapping.
+- run `pnpm --dir {{ frontend_dir | default('frontend') }} test:e2e:impact:validate` when that package script exists; otherwise run `node scripts/validate-playwright-impact-tags.mjs --strict`.
+
+Changed frontend source paths that do not match any project impact rule should fall back to full E2E rather than silently skipping browser coverage.
+
+The selector may run tagged subsets locally, but scoped E2E is an iteration accelerator, not proof of full release readiness.
+
+## 11. Smoke And Fixture Policy
+
+Governance smoke tests must use minimal fixtures.
+
+Do not copy the full repository into a temp directory for smoke tests. Do not copy build outputs, `node_modules`, Rust `target`, Playwright artifacts, or other generated directories unless the test specifically needs them.
+
+## 12. Change Discipline
 
 When changing conventions, scripts, architecture boundaries, generated artifacts, or agent-facing docs:
 
@@ -181,4 +239,4 @@ When changing conventions, scripts, architecture boundaries, generated artifacts
 2. Read this spec.
 3. Update the relevant spec or decision.
 4. Add or update mechanical checks when the convention is enforceable.
-5. Run the smallest relevant checks, and run `./scripts/finalize.sh` when implementation files changed.
+5. Run `./scripts/validate-changed-scope.mjs` before marking local implementation complete, and run `./scripts/finalize.sh` only for CI, pre-merge, or explicit full finalization.

@@ -11,7 +11,7 @@ Frontend/backend API drift is easy to miss when DTOs are copied by hand. A singl
 {% if include_api_contract | default(false) -%}
 Generate backend OpenAPI and frontend API TypeScript types with `./scripts/generate-api-contract.sh`.
 
-`./scripts/finalize.sh` runs `./scripts/check-api-contract.sh` to confirm committed generated artifacts are current.
+`./scripts/validate-changed-scope.mjs` runs contract checks when API/schema files are affected. `./scripts/finalize.sh` runs `./scripts/check-api-contract.sh` as part of the full gate to confirm committed generated artifacts are current.
 {% else -%}
 Generated API contracts are not enabled yet for this project shape. If a backend/frontend API boundary becomes important, choose one DTO/source-of-truth strategy and add generation plus freshness scripts before relying on frontend API shapes.
 {% endif %}

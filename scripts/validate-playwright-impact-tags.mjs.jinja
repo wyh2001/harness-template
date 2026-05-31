@@ -1,0 +1,252 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { impactTagRules } from './playwright-impact-rules.mjs';
+
+{% set validate_frontend_dir = frontend_dir | default('frontend') -%}
+{% set validate_e2e_test_dir = e2e_test_dir | default(validate_frontend_dir ~ '/e2e') -%}
+const supportedFlags = new Set(['--report', '--ratchet', '--strict']);
+const args = process.argv.slice(2);
+const unknownArgs = args.filter((arg) => !supportedFlags.has(arg));
+const selectedModes = args.filter((arg) => supportedFlags.has(arg));
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(scriptDir, '..');
+const e2eDir = path.join(workspaceRoot, '{{ validate_e2e_test_dir }}');
+const baselinePath = path.join(workspaceRoot, 'docs', 'status', 'playwright-e2e-impact-tag-baseline.json');
+const tagPattern = /@impact-[a-z0-9-]+/g;
+const specPattern = /\.(spec|test)\.(mjs|js|ts|tsx|jsx)$/;
+
+if (unknownArgs.length > 0) {
+  console.error(`Unknown argument(s): ${unknownArgs.join(', ')}`);
+  console.error('Supported arguments: --report, --ratchet, --strict');
+  process.exit(1);
+}
+
+if (selectedModes.length !== 1) {
+  console.error('Select exactly one mode: --report, --ratchet, or --strict.');
+  process.exit(1);
+}
+
+const reportMode = args.includes('--report');
+const ratchetMode = args.includes('--ratchet');
+const strictMode = args.includes('--strict');
+
+function toRepoRelative(fullPath) {
+  return path.relative(workspaceRoot, fullPath).replaceAll(path.sep, '/');
+}
+
+function walkE2eSpecs(directoryPath) {
+  if (!fs.existsSync(directoryPath)) {
+    return [];
+  }
+
+  const specs = [];
+  for (const entry of fs.readdirSync(directoryPath, { withFileTypes: true })) {
+    const entryPath = path.join(directoryPath, entry.name);
+    if (entry.isDirectory()) {
+      specs.push(...walkE2eSpecs(entryPath));
+      continue;
+    }
+
+    if (entry.isFile() && specPattern.test(entry.name)) {
+      specs.push(entryPath);
+    }
+  }
+
+  return specs.sort((left, right) => left.localeCompare(right));
+}
+
+function extractImpactTags(content) {
+  return [...new Set(content.match(tagPattern) ?? [])].sort();
+}
+
+function matchesAnyPattern(relativePath, patterns) {
+  return patterns.some((pattern) => pattern.test(relativePath));
+}
+
+function readBaseline(errors) {
+  if (!fs.existsSync(baselinePath)) {
+    errors.push(`${toRepoRelative(baselinePath)}: baseline file is missing.`);
+    return new Set();
+  }
+
+  let baseline;
+  try {
+    baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+  } catch (error) {
+    errors.push(`${toRepoRelative(baselinePath)}: could not parse JSON: ${error.message}`);
+    return new Set();
+  }
+
+  if (baseline.version !== 1) {
+    errors.push(`${toRepoRelative(baselinePath)}: version must be 1.`);
+  }
+
+  if (!Array.isArray(baseline.untaggedSpecs)) {
+    errors.push(`${toRepoRelative(baselinePath)}: untaggedSpecs must be an array.`);
+    return new Set();
+  }
+
+  const sortedSpecs = [...baseline.untaggedSpecs].sort();
+  if (JSON.stringify(sortedSpecs) !== JSON.stringify(baseline.untaggedSpecs)) {
+    errors.push(`${toRepoRelative(baselinePath)}: untaggedSpecs must be sorted.`);
+  }
+
+  const seenSpecs = new Set();
+  for (const specPath of baseline.untaggedSpecs) {
+    if (typeof specPath !== 'string' || !specPattern.test(specPath)) {
+      errors.push(`${toRepoRelative(baselinePath)}: invalid baseline spec path '${specPath}'.`);
+      continue;
+    }
+
+    if (seenSpecs.has(specPath)) {
+      errors.push(`${toRepoRelative(baselinePath)}: duplicate baseline spec '${specPath}'.`);
+      continue;
+    }
+
+    seenSpecs.add(specPath);
+  }
+
+  return seenSpecs;
+}
+
+function validateRules(e2eSpecs, errors) {
+  const knownTags = new Set();
+
+  for (const rule of impactTagRules) {
+    if (!/^@impact-[a-z0-9-]+$/.test(rule.tag ?? '')) {
+      errors.push(`scripts/playwright-impact-rules.mjs: invalid tag '${rule.tag}'.`);
+      continue;
+    }
+
+    if (knownTags.has(rule.tag)) {
+      errors.push(`scripts/playwright-impact-rules.mjs: duplicate tag '${rule.tag}'.`);
+    }
+    knownTags.add(rule.tag);
+
+    if (!Array.isArray(rule.sourcePatterns) || rule.sourcePatterns.length === 0) {
+      errors.push(`scripts/playwright-impact-rules.mjs: '${rule.tag}' must define sourcePatterns.`);
+    }
+
+    if (!Array.isArray(rule.e2ePatterns) || rule.e2ePatterns.length === 0) {
+      errors.push(`scripts/playwright-impact-rules.mjs: '${rule.tag}' must define e2ePatterns.`);
+      continue;
+    }
+
+    const hasCurrentSpecMatch = e2eSpecs.some((specPath) => matchesAnyPattern(specPath, rule.e2ePatterns));
+    if (e2eSpecs.length > 0 && !hasCurrentSpecMatch) {
+      errors.push(`scripts/playwright-impact-rules.mjs: '${rule.tag}' e2ePatterns do not match any current E2E spec.`);
+    }
+  }
+
+  return knownTags;
+}
+
+function findRuleForTag(tag) {
+  return impactTagRules.find((rule) => rule.tag === tag);
+}
+
+function printReport({ baseline, e2eSpecs, specTags }) {
+  const untaggedSpecs = e2eSpecs.filter((specPath) => {
+    const tags = specTags.get(specPath) ?? [];
+    return tags.length === 0;
+  });
+
+  console.log(`Playwright impact tag report: ${e2eSpecs.length} spec file(s), ${untaggedSpecs.length} untagged.`);
+  console.log(`Baseline entries: ${baseline.size}.`);
+  for (const specPath of e2eSpecs) {
+    const tags = specTags.get(specPath) ?? [];
+    console.log(`- ${specPath}: ${tags.length > 0 ? tags.join(', ') : 'untagged'}`);
+  }
+}
+
+function main() {
+  const errors = [];
+  const specFiles = walkE2eSpecs(e2eDir);
+  const e2eSpecs = specFiles.map((filePath) => toRepoRelative(filePath));
+
+  if (!fs.existsSync(e2eDir) && impactTagRules.length > 0) {
+    errors.push(`{{ validate_e2e_test_dir }}: directory is missing.`);
+  }
+
+  const baseline = readBaseline(errors);
+  const knownTags = validateRules(e2eSpecs, errors);
+  const currentSpecSet = new Set(e2eSpecs);
+  const specTags = new Map();
+
+  for (const filePath of specFiles) {
+    const specPath = toRepoRelative(filePath);
+    const content = fs.readFileSync(filePath, 'utf8');
+    const tags = extractImpactTags(content);
+    specTags.set(specPath, tags);
+
+    if (tags.length === 0) {
+      if (strictMode) {
+        errors.push(`${specPath}: missing required @impact-* Playwright tag.`);
+      } else if (ratchetMode && !baseline.has(specPath)) {
+        errors.push(`${specPath}: new E2E spec is missing @impact-* tag and is not in the ratchet baseline.`);
+      }
+      continue;
+    }
+
+    if (baseline.has(specPath)) {
+      errors.push(`${toRepoRelative(baselinePath)}: stale baseline entry '${specPath}' now has impact tag(s); remove it from the baseline.`);
+    }
+
+    for (const tag of tags) {
+      if (!knownTags.has(tag)) {
+        errors.push(`${specPath}: unknown Playwright impact tag '${tag}'.`);
+        continue;
+      }
+
+      const rule = findRuleForTag(tag);
+      if (rule && !matchesAnyPattern(specPath, rule.e2ePatterns)) {
+        errors.push(`${specPath}: tag '${tag}' is not allowed for this spec path by scripts/playwright-impact-rules.mjs.`);
+      }
+    }
+  }
+
+  for (const baselineSpec of baseline) {
+    if (!currentSpecSet.has(baselineSpec)) {
+      errors.push(`${toRepoRelative(baselinePath)}: stale baseline entry '${baselineSpec}' no longer exists.`);
+    }
+  }
+
+  if (strictMode) {
+    for (const rule of impactTagRules) {
+      for (const specPath of e2eSpecs) {
+        if (!matchesAnyPattern(specPath, rule.e2ePatterns)) {
+          continue;
+        }
+
+        const tags = specTags.get(specPath) ?? [];
+        if (!tags.includes(rule.tag)) {
+          errors.push(`${specPath}: selector rule '${rule.tag}' maps this spec, but the spec does not carry that tag.`);
+        }
+      }
+    }
+  }
+
+  if (reportMode) {
+    printReport({ baseline, e2eSpecs, specTags });
+  }
+
+  if (errors.length === 0) {
+    if (ratchetMode) {
+      console.log(`Playwright impact tag ratchet passed: ${baseline.size} baseline untagged spec(s), 0 new untagged spec(s).`);
+    } else if (strictMode) {
+      console.log(`Playwright impact tag strict validation passed: all ${e2eSpecs.length} E2E spec file(s) are tagged.`);
+    }
+    process.exit(0);
+  }
+
+  console.error(`Playwright impact tag validation failed with ${errors.length} issue(s):`);
+  for (const error of errors) {
+    console.error(`- ${error}`);
+  }
+  process.exit(1);
+}
+
+main();

@@ -1,0 +1,26 @@
+{% set impact_frontend_dir = frontend_dir | default('frontend') -%}
+{% set impact_e2e_test_dir = e2e_test_dir | default(impact_frontend_dir ~ '/e2e') -%}
+{% set impact_frontend_dir_regex = impact_frontend_dir | replace('/', '\\/') -%}
+{% set impact_e2e_test_dir_regex = impact_e2e_test_dir | replace('/', '\\/') -%}
+
+// Define project-specific impact areas here after real user journeys and E2E
+// specs exist. The harness template must not invent a universal tag taxonomy.
+//
+// Example:
+// export const impactTagRules = [
+//   {
+//     tag: '@impact-export',
+//     description: 'Export preview and artifact rendering.',
+//     sourcePatterns: [/^{{ impact_frontend_dir_regex }}\/src\/features\/export\//],
+//     e2ePatterns: [/^{{ impact_e2e_test_dir_regex }}\/export-.*\.spec\.ts$/],
+//   },
+// ];
+export const impactTagRules = [];
+
+export const fullE2eTriggerPatterns = [
+  /^{{ impact_frontend_dir_regex }}\/package(?:-lock)?\.json$/,
+  /^{{ impact_frontend_dir_regex }}\/pnpm-lock\.yaml$/,
+  /^{{ impact_frontend_dir_regex }}\/playwright\.config\./,
+  /^{{ impact_frontend_dir_regex }}\/vite\.config\./,
+  /^{{ impact_frontend_dir_regex }}\/astro\.config\./,
+];
