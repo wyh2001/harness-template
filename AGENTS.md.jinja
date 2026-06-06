@@ -111,6 +111,28 @@ Run a temporary startup smoke check:
 
 Governance smoke tests must use minimal fixtures. Do not copy the full repository into a temp directory, and do not copy build outputs, `node_modules`, Rust `target`, Playwright artifacts, or other generated directories unless the test specifically needs them.
 
+## Credential and Tooling Safety
+
+Do not change global Git, GitHub, or credential-manager configuration by default. In particular,
+do not run commands such as `gh auth setup-git`, change `credential.helper`, overwrite Git remotes,
+or alter global auth settings unless the user has explicitly approved that exact change after being
+told how it can affect existing VS Code, Keychain, GitHub CLI, or repository-specific workflows.
+
+## Interaction Design Discussions
+
+For frontend, HCI, product-flow, or interaction-design discussions:
+
+- First verify the current product flow in local code, specs, or status notes
+  before proposing changes. Do not rely on memory or a generic mental model of
+  the app.
+- Explain the design naturally as usual, then add a concise natural-language
+  diff against the current design so the proposal is easy to review.
+- Use diff-style formatting only for real changes; mark unchanged areas as "no
+  change" in prose instead.
+- Keep interaction design separate from implementation details until the
+  interaction model is clear. Discuss code structure only after the current flow
+  and proposed UX diff are understood.
+
 ## Development Commands
 
 {% if backend_stack == 'rust' -%}
