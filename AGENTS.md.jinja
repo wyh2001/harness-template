@@ -190,6 +190,8 @@ Markdown:
 - Add mechanical checks when a convention becomes important.
 - If the user's request is ambiguous or the intended action is unclear, pause and confirm before proceeding; offer concise options when that helps the user decide.
 - Follow the order of operations in the user's instructions when an order is stated. If that order seems unsafe, impossible, or likely to cause avoidable rework, pause and ask before changing the sequence.
+- Interpret the user's instructions according to their literal wording first. If the literal wording, likely intent, or operational consequence diverges, or if a phrase could mean either preparation or execution, pause and confirm the intended action before proceeding.
+- Treat Git pushes as user-controlled remote writes. Do not run `git push`, `git push --force`, `git push --force-with-lease`, or equivalent remote ref updates unless the user directly asks for that exact push operation; for force pushes or other history-rewriting remote updates, require a separate second confirmation after stating the remote, branch, expected old and new commits, and workflow impact.
 - When fixing bugs, use a fail-pass loop: first add or reproduce a failing test that captures the reported problem, then make it pass; for frontend bugs, strongly consider expressing the failure as a Playwright E2E check.
 - Do not start the implementation fix until the bug is captured by a failing test. If the failure cannot be captured after reasonable attempts, stop and report the blocker instead of changing code for the sake of changing code.
 - Do not keep a bug-fix test that passed before the fix as evidence of the bug.
