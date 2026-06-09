@@ -200,4 +200,4 @@ Markdown:
 - Before discarding uncommitted or untracked working-tree content with a broad delete/reset command such as `git checkout --`, `git reset --hard`, `git clean`, or bulk `rm`, require a separate explicit confirmation from the user. This does not cover ordinary code edits or deleting already-committed code as part of an intentional change.
 - Keep generated contracts current and included in the change when they are part of the workflow.
 - When docs and code drift, update the stale artifact in the same change when feasible.
-- When the user asks for a commit, use a short commit message that describes the actual change; conventional types like `docs:`, `fix:`, `feat:`, or `chore:` are fine when they fit.
+- When creating commits, use Conventional Commits format, such as `feat(web): ...`, `fix(api): ...`, `docs: ...`, or `chore: ...`.
