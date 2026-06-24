@@ -35,7 +35,17 @@ This document is for changing project conventions, architecture rules, validatio
 
 When these disagree, do not add override notes. Update the stale artifact or leave a specific follow-up.
 
-## 3. Mechanical Checks
+## 3. Interaction Discipline
+
+Agent work should preserve the user's control over intent and edits.
+
+- Treat a question as a request for an answer. Do not edit files unless the user explicitly asks for a change or approves a proposed change.
+- Before answering a factual question about the repository, inspect the relevant file, diff, or code path. If the source was not checked directly, say that in the answer.
+- Before editing design or documentation guidance, describe the proposed delta in natural language: what current text, behavior, or API is being replaced, and what it will become.
+- Keep current API, proposed target API, and possible future API separate. Do not describe target or future behavior as if it already exists.
+- API names and examples should make the operation and data flow visible without hidden context. Prefer explicit inputs over ambient state, implicit globals, or magic conventions.
+
+## 4. Mechanical Checks
 
 Important repository conventions should be enforced by scripts when practical.
 
@@ -69,7 +79,7 @@ Checks that depend on real application structure should be staged. Decide the de
 
 Formatting and generation must converge: if a formatter and generator keep changing the same generated file back and forth, exclude that generated path from formatter globs, post-format during generation, or make the generator emit formatter-stable output.
 
-## 4. Validation Policy
+## 5. Validation Policy
 
 Run the most relevant checks for the changed scope.
 
@@ -104,7 +114,7 @@ Use:
 
 This remains the exhaustive CI/pre-merge gate and should not be optimized into a changed-scope shortcut.
 
-## 5. Documentation Style
+## 6. Documentation Style
 
 Docs should be indexed, cross-linked, and scoped.
 
@@ -123,7 +133,7 @@ Avoid:
 - unlinked specs.
 - rules that exist only in chat history.
 
-## 6. Code Comment Policy
+## 7. Code Comment Policy
 
 Comments are for agent legibility and maintenance boundaries, not for narrating code.
 
@@ -143,7 +153,7 @@ Avoid comments that:
 {% if backend_stack == 'rust' -%}
 Rust source files under `crates/` must start with a module-level `//!` comment. The comment should explain the module's boundary, layer, or reason to exist in one short sentence. This is enforced by `scripts/check-rust-module-docs.sh`.
 {% endif %}
-## 7. Layering Policy
+## 8. Layering Policy
 
 Layering rules should describe dependency direction and ownership, not ceremony.
 
@@ -170,13 +180,13 @@ Avoid vague failure shape:
 invalid architecture
 ```
 
-## 8. Maintainability Invariants
+## 9. Maintainability Invariants
 
 Hand-written product source files should stay at or below 300 lines. Split by feature, layer, route, component, helper, fixture, or test journey before exceeding that limit.
 
 Generated files, lockfiles, build output, harness scripts, and package-manager output are exempt. If a generated file becomes a repeated editing target, replace that workflow with a smaller generated surface or a checked-in source template.
 
-## 9. Schema Generation Policy
+## 10. Schema Generation Policy
 
 Treat generated schemas and contracts as project memory.
 
@@ -193,7 +203,7 @@ Frontend code should import generated API types instead of copying backend DTOs 
 {% else -%}
 When this project gains generated schemas, choose the DTO/source-of-truth strategy, add a generation script, add a freshness check, and update the schema task before relying on the generated output in feature code.
 {% endif %}
-## 10. E2E Policy
+## 11. E2E Policy
 
 {% if frontend_stack != 'none' -%}
 Frontend projects must explicitly evaluate Playwright E2E. Use Playwright for stable browser-level user journeys after the frontend can start reliably. E2E tests should protect important workflows, not duplicate unit or component tests.
@@ -225,13 +235,13 @@ Changed frontend source paths that do not match any project impact rule should f
 
 The selector may run tagged subsets locally, but scoped E2E is an iteration accelerator, not proof of full release readiness.
 
-## 11. Smoke And Fixture Policy
+## 12. Smoke And Fixture Policy
 
 Governance smoke tests must use minimal fixtures.
 
 Do not copy the full repository into a temp directory for smoke tests. Do not copy build outputs, `node_modules`, Rust `target`, Playwright artifacts, or other generated directories unless the test specifically needs them.
 
-## 12. Change Discipline
+## 13. Change Discipline
 
 When changing conventions, scripts, architecture boundaries, generated artifacts, or agent-facing docs:
 
@@ -240,5 +250,7 @@ When changing conventions, scripts, architecture boundaries, generated artifacts
 3. Update the relevant spec or decision.
 4. Add or update mechanical checks when the convention is enforceable.
 5. Run `./scripts/validate-changed-scope.mjs` before marking local implementation complete, and run `./scripts/finalize.sh` only for CI, pre-merge, or explicit full finalization.
+
+Before creating a commit, inspect the actual diff and write the commit message from the concrete change in that diff, not from the broad topic of the edited files.
 
 When creating commits, use Conventional Commits format, such as `feat(web): ...`, `fix(api): ...`, `docs: ...`, or `chore: ...`.
