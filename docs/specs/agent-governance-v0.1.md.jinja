@@ -42,6 +42,7 @@ Agent work should preserve the user's control over intent and edits.
 - Treat a question as a request for an answer. Do not edit files unless the user explicitly asks for a change or approves a proposed change.
 - Before answering a factual question about the repository, inspect the relevant file, diff, or code path. If the source was not checked directly, say that in the answer.
 - Before editing design or documentation guidance, describe the proposed delta in natural language: what current text, behavior, or API is being replaced, and what it will become.
+- Treat the agreed objective as the implementation contract. Do not substitute a cheaper or adjacent outcome because the original is difficult, time-consuming, or awkward; if the objective should change or is unrealistic, stop and realign before coding.
 - Keep current API, proposed target API, and possible future API separate. Do not describe target or future behavior as if it already exists.
 - API names and examples should make the operation and data flow visible without hidden context. Prefer explicit inputs over ambient state, implicit globals, or magic conventions.
 
