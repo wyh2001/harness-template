@@ -189,6 +189,7 @@ Markdown:
 - Plan layer boundaries before scaffolding code; dependencies should not point backward through the documented layer direction.
 - Keep hand-written product source files at or below 300 lines; split by domain, layer, or helper before growing past that boundary.
 - Add mechanical checks when a convention becomes important.
+- Treat validation gates as independent constraints: do not weaken, bypass, or rewrite them merely to make the current change pass.
 - If the user's request is ambiguous or the intended action is unclear, pause and confirm before proceeding; offer concise options when that helps the user decide.
 - Follow the order of operations in the user's instructions when an order is stated. If that order seems unsafe, impossible, or likely to cause avoidable rework, pause and ask before changing the sequence.
 - Interpret the user's instructions according to their literal wording first. If the literal wording, likely intent, or operational consequence diverges, or if a phrase could mean either preparation or execution, pause and confirm the intended action before proceeding.
