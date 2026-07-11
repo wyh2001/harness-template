@@ -6,6 +6,7 @@ Reusable Copier template for the project harness conventions I keep rebuilding:
 - progressive-disclosure `docs/` with specs, decisions, and repeatable tasks.
 - mandatory local changed-scope validation through `scripts/validate-changed-scope.mjs`.
 - check-only full finalization through `scripts/finalize.sh` for CI, pre-merge, and explicit full-gate runs.
+- living execution plans under `docs/exec-plans/` for multi-hour features, major refactors, and cross-area changes.
 - markdown lint, Rust clippy/module docs, .NET gates, generated API contract checks, governance validation, and optional Playwright E2E impact rules, validation, and selection.
 - unified VS Code tasks, `dev.sh`, `smoke.sh`, and health checks.
 - governance docs for scaffold planning, comment policy, layering, DTO source-of-truth choices, 300-line product source limits, schema generation, and E2E testing.

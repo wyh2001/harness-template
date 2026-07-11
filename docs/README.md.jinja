@@ -20,6 +20,8 @@ Before marking local implementation work complete, run `./scripts/validate-chang
 
 Before scaffolding a backend, frontend, feature slice, or validation gate, use [Scaffold Planning Task](./tasks/scaffold-planning.md).
 
+For multi-hour features, major refactors, or cross-area changes, create and maintain a living execution plan under [Exec Plans](./exec-plans/README.md).
+
 When backend API shapes change, use [Schema Generation Task](./tasks/schema-generation.md).
 {% if frontend_stack != 'none' %}
 When a frontend exists, explicitly evaluate Playwright E2E with [E2E Testing Task](./tasks/e2e-testing.md) and [Playwright E2E Impact Tags](./specs/playwright-e2e-impact-tags.md). Enable it when stable user journeys exist; otherwise record the deferral reason.
@@ -39,6 +41,7 @@ When a frontend exists, explicitly evaluate Playwright E2E with [E2E Testing Tas
 
 ## Tasks
 
+- [Exec Plans](./exec-plans/README.md) - Living plan format and folder layout for multi-hour or cross-area work.
 - [Alignment Check Task](./tasks/alignment-check.md) - Checklist for detecting and fixing drift between docs, generated contracts, decisions, code, and checks.
 - [Scaffold Planning Task](./tasks/scaffold-planning.md) - Checklist for deciding layers, DTO ownership, and staged checks before asking an agent to scaffold code.
 - [Schema Generation Task](./tasks/schema-generation.md) - Workflow for regenerating OpenAPI and frontend API types.

@@ -1,6 +1,6 @@
 ---
 name: repo-harness-bootstrap
-description: "Bootstrap a new repository with an agent-legible harness: short AGENTS.md entrypoint, progressive docs/specs/decisions/tasks, mandatory changed-scope validation, check-only full finalization, scaffold planning, DTO/source-of-truth guidance, layer-direction rules, maintainability checks, and explicit Playwright E2E evaluation. Use when creating a fresh repo or applying the harness-template Copier project before the project-specific architecture settles."
+description: "Bootstrap a new repository with an agent-legible harness: short AGENTS.md entrypoint, progressive docs/specs/decisions/tasks/exec-plans, mandatory changed-scope validation, check-only full finalization, scaffold planning, DTO/source-of-truth guidance, layer-direction rules, maintainability checks, and explicit Playwright E2E evaluation. Use when creating a fresh repo or applying the harness-template Copier project before the project-specific architecture settles."
 ---
 
 # Repo Harness Bootstrap
@@ -48,6 +48,8 @@ Create these entry points:
 - `docs/decisions/`: short ADR-style rationale.
 - `docs/tasks/`: repeatable workflows, especially scaffold planning, schema
   generation, alignment checks, and E2E testing when a frontend exists.
+- `docs/exec-plans/`: living execution plans for multi-hour features, major
+  refactors, or cross-area changes.
 - `./scripts/validate-changed-scope.mjs`: mandatory local completion check.
 - `./scripts/validate-agent-governance.mjs`: agent-facing docs alignment check.
 - `./scripts/finalize.sh`: check-only CI/pre-merge full gate.

@@ -11,6 +11,14 @@ Use this file as a table of contents, not as a full instruction manual. Durable 
 
 Before scaffolding a new backend, frontend, feature slice, or validation gate, use `docs/tasks/scaffold-planning.md` to record layer direction, DTO/source-of-truth strategy, and checks that can be added now versus later.
 
+## ExecPlan Rule
+
+For multi-hour features, major refactors, or cross-area changes, create an execution plan in:
+
+- `docs/exec-plans/active/<topic>.md`
+
+The plan must stay updated while work progresses and be moved to `docs/exec-plans/completed` after completion.
+
 ## Project Structure
 
 {% if backend_stack == 'rust' -%}
@@ -22,6 +30,7 @@ Before scaffolding a new backend, frontend, feature slice, or validation gate, u
 - `{{ frontend_dir }}/` - {% if frontend_stack == 'astro' %}Astro frontend{% else %}Vite frontend{% endif %}.
 {% endif -%}
 - `docs/` - Product specs, technical specs, decisions, and repeatable tasks.
+- `docs/exec-plans/` - Living execution plans for multi-hour or cross-area work.
 - `scripts/` - Local maintenance and validation scripts.
 {% if include_api_contract | default(false) -%}
 - `{% if backend_stack == 'dotnet' %}{{ dotnet_openapi_contract_path }}{% else %}{{ openapi_contract_path }}{% endif %}` - Committed OpenAPI contract.
