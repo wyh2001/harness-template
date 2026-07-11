@@ -5,9 +5,13 @@
 Before project work, read:
 
 1. `docs/README.md`
-2. The relevant spec or decision linked from `docs/README.md`
+2. `docs/research/engineering-principles.md`
+3. The relevant spec or decision linked from `docs/README.md`
+4. For frontend or interaction work, `docs/research/hci-principles.md`
 
 Use this file as a table of contents, not as a full instruction manual. Durable project knowledge should live in `docs/`.
+
+For non-trivial behavior changes, use `docs/SPEC_TEMPLATE.md` and `docs/TRACEABILITY_GUIDE.md` before planning or coding.
 
 Before scaffolding a new backend, frontend, feature slice, or validation gate, use `docs/tasks/scaffold-planning.md` to record layer direction, DTO/source-of-truth strategy, and checks that can be added now versus later.
 
@@ -31,6 +35,7 @@ The plan must stay updated while work progresses and be moved to `docs/exec-plan
 {% endif -%}
 - `docs/` - Product specs, technical specs, decisions, and repeatable tasks.
 - `docs/exec-plans/` - Living execution plans for multi-hour or cross-area work.
+- `docs/research/` - Reusable engineering and HCI principles for routed agent context.
 - `scripts/` - Local maintenance and validation scripts.
 {% if include_api_contract | default(false) -%}
 - `{% if backend_stack == 'dotnet' %}{{ dotnet_openapi_contract_path }}{% else %}{{ openapi_contract_path }}{% endif %}` - Committed OpenAPI contract.

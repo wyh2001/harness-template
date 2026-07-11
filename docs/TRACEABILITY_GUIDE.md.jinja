@@ -1,0 +1,90 @@
+# Traceability Guide
+
+## Purpose
+
+Define a stable mapping from spec to plan to code to tests.
+
+## ID Conventions
+
+- Requirement: `REQ-<AREA>-NNN`
+- Example: `EX-<AREA>-NNN<suffix>`
+- Acceptance criteria: `AC-<AREA>-NNN-NN`
+
+`<AREA>` should be a short uppercase domain token such as `WORKSPACE`, `LAYOUT`, `INTERACT`, or `API`.
+
+## Required Mapping
+
+Only specs marked with `Traceability: Required` are expected to satisfy the full structure check. Use that marker for behavior specs, bug-fix specs, and validation specs where changed code or tests must map back to explicit requirements. Leave reference, architecture, governance, or background docs unmarked unless they define behavior that needs this mapping.
+
+Every implemented change should preserve this chain:
+
+1. Requirement ID in spec
+2. Example IDs linked to that requirement
+3. Planner steps mapped to requirement and example IDs
+4. Writer code and tests mapped back to requirement and example IDs
+5. Critic checks that no spec-plan-code-test drift exists
+
+## Minimum Output Contract
+
+Spec output must include:
+
+- Requirement IDs
+- Example IDs
+- Acceptance criteria IDs
+- Planned test types
+
+Planner output must include:
+
+- Step-by-step mapping to requirement and example IDs
+- Validation command per step
+
+Writer output must include:
+
+- Code and test mapping to requirement and example IDs
+- Evidence from executed checks
+
+Critic output must include:
+
+- Drift type (none, spec-drift, plan-drift, test-drift)
+- Spec reference IDs for each finding
+
+## Practical Annotation Patterns
+
+Backend tests (C#):
+
+- Add short comments or summary lines that include requirement and example IDs.
+
+Frontend tests (TypeScript):
+
+- Add test block comments that include requirement and example IDs.
+
+Validation rules:
+
+- Map boundary validation behavior to explicit requirement IDs in companion docs.
+
+## Quality Gate Checklist
+
+A spec fails gate if any critical requirement is missing one or more of:
+
+- Requirement ID
+- At least one behavior example ID
+- Acceptance criteria IDs
+- Test requirement
+
+A plan fails gate if any implementation step lacks:
+
+- Target files
+- Mapping to requirement and example IDs
+- Validation command and expected result
+
+Writer evidence fails gate if changed critical behavior lacks:
+
+- Test update or explicit manual verification with rationale
+
+## Contradiction Handling
+
+When docs conflict:
+
+1. Record the conflicting files explicitly.
+2. Stop broad implementation.
+3. Resolve contradiction in spec before continuing.

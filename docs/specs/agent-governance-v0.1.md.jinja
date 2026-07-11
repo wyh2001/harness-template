@@ -25,6 +25,10 @@ This document is for changing project conventions, architecture rules, validatio
 
 `docs/tasks/` contains repeatable procedures such as doc gardening and schema generation.
 
+`docs/research/` contains reusable principles that agents should cite when relevant.
+
+`docs/SPEC_TEMPLATE.md` and `docs/TRACEABILITY_GUIDE.md` define the expected structure for non-trivial behavior changes.
+
 ## 2. Source-of-truth Rules
 
 - Specs describe the intended current system.
@@ -67,6 +71,7 @@ The repository harness includes:
 - Playwright E2E user-journey checks through the frontend `test:e2e` script.
 {% endif -%}
 - Markdown lint for `AGENTS.md`, README files, and `docs/**/*.md`.
+- Traceability structure validation for specs marked `Traceability: Required` through `scripts/validate-traceability-structure.mjs`.
 {% if include_layering_validator -%}
 - Architecture layering and 300-line hand-written product source file checks through `scripts/validate-layering.mjs`.
 {% endif -%}

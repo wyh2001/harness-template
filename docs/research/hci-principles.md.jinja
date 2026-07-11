@@ -1,0 +1,137 @@
+# HCI High-Frequency Principles (Spec-Driven Edition)
+
+## Purpose
+
+This memo captures common, high-frequency HCI principles that repeatedly show up in classic papers and review literature.
+
+This is a general-purpose principles memo that can be reused across agent workflows.
+
+Use this as a practical checklist for frontend and interaction work in this repository.
+
+## How To Use
+
+- Use this file together with `docs/README.md`.
+- For interaction changes, cite principle IDs (for example `P3`, `P7`) in spec, plan, and review outputs.
+- Do not try to optimize every principle at once. Prioritize by risk and user impact.
+
+## Principles
+
+### P1. Keep System Status Visible And Timely
+
+- Statement: users should always know what the system is doing, what changed, and what is pending.
+- Why this is high-frequency: feedback loops reduce confusion, especially in mixed-initiative tools where the system proposes edits.
+- Frontend checks:
+  - Show immediate state updates after user action.
+  - Use explicit loading/saving/progress states.
+  - Distinguish recommendation preview from applied draft state.
+- Sources: [R1], [R2].
+
+### P2. Prefer Recognition Over Recall
+
+- Statement: surface options and context where decisions are made; do not require memory-heavy navigation.
+- Why this is high-frequency: memory load is a recurring root cause in usability failures.
+- Frontend checks:
+  - Keep high-frequency controls visible near relevant objects.
+  - Use clear labels and progressive disclosure.
+  - Avoid burying critical actions in deep inspector stacks.
+- Sources: [R1], [R2], [R10].
+
+### P3. Preserve User Control, Reversibility, And Safe Exploration
+
+- Statement: users need clear exits, undo paths, and local control over system proposals.
+- Why this is high-frequency: reversible interaction increases confidence and reduces fear of trying alternatives.
+- Frontend checks:
+  - Provide undo/redo for structural edits.
+  - Keep recommendation actions separate from direct object edits.
+  - Block destructive transitions without clear confirmation.
+- Sources: [R1], [R7], [R12].
+
+### P4. Prevent Errors Before Explaining Errors
+
+- Statement: prioritize guardrails and constraint checks over post-hoc error messages.
+- Why this is high-frequency: prevention is cheaper than recovery for both users and engineering.
+- Frontend checks:
+  - Validate invalid states before commit.
+  - Explain why an action is blocked (for example lock or preserve constraints).
+  - Keep error language actionable and specific.
+- Sources: [R1], [R8].
+
+### P5. Minimize Decision Cost (Hick) And Motor Cost (Fitts)
+
+- Statement: reduce unnecessary choice branching and reduce pointer effort for frequent actions.
+- Why this is high-frequency: interaction time scales with decision complexity and target difficulty.
+- Frontend checks:
+  - Keep choice sets small and task-relevant.
+  - Prioritize larger, closer targets for frequent actions.
+  - Avoid forcing users to repeatedly hit thin or distant controls for common tasks.
+- Sources: [R5], [R6].
+
+### P6. Maintain Spatial Stability And Landmarks
+
+- Statement: major workspace regions should remain structurally stable across states.
+- Why this is high-frequency: users build spatial memory from stable landmarks; abrupt shell changes increase re-orientation cost.
+- Frontend checks:
+  - Keep explorer/stage/inspector topology stable.
+  - Prefer content density changes over skeleton changes.
+  - Avoid stage displacement caused by unrelated panel growth.
+- Sources: [R11], [R13], [R14].
+
+### P7. Use Direct Manipulation For Object-Level Editing
+
+- Statement: object-level actions should be visible, local, incremental, and immediately reflected.
+- Why this is high-frequency: direct manipulation improves predictability and learnability for precision tasks.
+- Frontend checks:
+  - Keep seam/frame edits local to the stage.
+  - Show immediate visual result of drag/pan/zoom operations.
+  - Separate object-local actions from global workflow controls.
+- Sources: [R7], [R12].
+
+### P8. Use Progressive Disclosure, But Keep Structure Predictable
+
+- Statement: reveal complexity gradually without unpredictable structural rearrangement.
+- Why this is high-frequency: novices need reduced initial load, but experts need stable and discoverable structure.
+- Frontend checks:
+  - Keep shell stable; vary content emphasis and affordances.
+  - Use lightweight empty-state placeholders rather than missing regions.
+  - Make adaptivity understandable and user-controlled when possible.
+- Sources: [R9], [R10], [R13].
+
+### P9. Define Behavior Through Concrete Examples
+
+- Statement: represent key behaviors with concrete examples and edge cases, not only abstract prose.
+- Why this is high-frequency: example-driven specs improve shared understanding and testability.
+- Frontend checks:
+  - Add behavior examples to specs for key interactions.
+  - Map examples to acceptance criteria and tests.
+  - Ensure changed behavior has explicit test coverage or explicit manual verification.
+- Sources: [R3], [R4], [R8].
+
+### P10. Evaluate UX With Multiple Measures, Not A Single Score
+
+- Statement: use multiple evaluation dimensions (effectiveness, efficiency, satisfaction, confidence, error rate), not one proxy metric.
+- Why this is high-frequency: review literature repeatedly shows construct ambiguity and weak single-metric validity.
+- Frontend checks:
+  - Define what is being measured for each change.
+  - Report at least one task-performance metric and one subjective metric.
+  - Track regressions in testability and explainability.
+- Sources: [R15], [R16], [R17].
+
+## Source Index
+
+- [R1] Nielsen, J., Molich, R. (1990). Heuristic evaluation of user interfaces. CHI '90. https://doi.org/10.1145/97243.97281
+- [R2] Nielsen, J. (1994). Heuristic Evaluation. In J. Nielsen & R. L. Mack (Eds.), Usability Inspection Methods. John Wiley & Sons.
+- [R3] Fowler, M. Specification by Example. https://martinfowler.com/bliki/SpecificationByExample.html
+- [R4] Cucumber BDD: Discovery, Formulation, Automation. https://cucumber.io/docs/bdd/
+- [R5] Hick, W. E. (1952). On the rate of gain of information. https://doi.org/10.1080/17470215208416600
+- [R6] Fitts, P. M. (1954). The information capacity of the human motor system in controlling the amplitude of movement. https://doi.org/10.1037/h0055392
+- [R7] Shneiderman, B. (1997). Direct Manipulation for Comprehensible, Predictable and Controllable User Interfaces. https://www.cs.umd.edu/~ben/papers/Shneiderman1997Direct2.pdf
+- [R8] Carroll, J. M., Rosson, M. B. The Paradox of the Active User. https://roland.pri.ee/doktor/papers/Paradox%20of%20the%20active%20user.pdf
+- [R9] Leung, R., McGrenere, J., Graf, P. (2010). Improving learnability with a layered interface design. https://www.cs.ubc.ca/labs/edapt/papers/leung2010_2.pdf
+- [R10] Findlater, L., McGrenere, J. (2004). A comparison of static, adaptive, and adaptable menus. https://www.cs.ubc.ca/labs/edapt/papers/findlater2004.pdf
+- [R11] Cockburn, A., Gutwin, C., Alexander, J. (2007). Supporting and exploiting spatial memory in user interfaces. https://www.nowpublishers.com/article/DownloadSummary/HCI-046
+- [R12] Shneiderman, B. (1996). The eyes have it: a task by data type taxonomy for information visualizations. https://www.cs.umd.edu/users/ben/papers/Shneiderman1996eyes.pdf
+- [R13] Uddin, S., Gutwin, C. (2021). The image of the interface: landmarks and spatial memory in graphical interfaces. https://samicit06.github.io/publication/chi21Sami/CHI2021_image_of_the_interface.pdf
+- [R14] Kang, H., Plaisant, C., Shneiderman, B. (2003). New approaches to help users get started with visual interfaces. https://www.cs.umd.edu/~ben/papers/Kang2003New.pdf
+- [R15] Hornbæk, K. (2006). Current practice in measuring usability: challenges to usability studies and research. https://doi.org/10.1016/j.ijhcs.2005.06.002
+- [R16] Vermeeren, A. P. O. S., et al. (2010). User experience evaluation methods: current state and development needs. https://doi.org/10.1145/1868914.1868973
+- [R17] Bargas-Avila, J. A., Hornbæk, K. (2011). Old wine in new bottles or novel challenges? A critical analysis of empirical studies of user experience. https://doi.org/10.1145/1978942.1979343

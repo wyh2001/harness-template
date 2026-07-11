@@ -99,6 +99,9 @@ print_stage "API contract"
 print_stage "Markdown lint"
 ./scripts/lint-md.sh
 
+print_stage "Traceability structure"
+node scripts/validate-traceability-structure.mjs --strict
+
 print_stage "Agent governance"
 node scripts/validate-agent-governance.mjs
 

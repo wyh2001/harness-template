@@ -1,5 +1,7 @@
 # Playwright E2E Impact Tags
 
+Traceability: Required
+
 ## Scope
 
 Local frontend iteration needs a deterministic way to run the smallest relevant Playwright E2E subset. Full finalization remains the exhaustive CI and pre-merge gate; scoped E2E is only a local iteration accelerator.
@@ -53,6 +55,11 @@ node scripts/select-playwright-impact-tests.mjs --since origin/main
 
 Every active Playwright E2E spec must carry one or more project-defined `@impact-*` tags.
 
+Behavior examples:
+
+- EX-E2EIMPACT-001A: A new project-owned tag is added to the rule file before a spec uses it.
+- EX-E2EIMPACT-001B: A spec uses an unknown tag and strict validation rejects it.
+
 Acceptance criteria:
 
 - AC-E2EIMPACT-001-01: Tags are declared by project rules, not by a template-wide fixed list.
@@ -62,6 +69,11 @@ Acceptance criteria:
 ### REQ-E2EIMPACT-002: Impact Validation
 
 The repository must support report, ratchet, and strict validation modes.
+
+Behavior examples:
+
+- EX-E2EIMPACT-002A: Ratchet mode allows documented legacy untagged specs but rejects newly introduced untagged specs.
+- EX-E2EIMPACT-002B: Strict mode rejects every untagged E2E spec.
 
 Acceptance criteria:
 
@@ -80,6 +92,11 @@ The selector must map changed files to one of:
 - tagged Playwright subset through `--grep`.
 - full E2E fallback.
 
+Behavior examples:
+
+- EX-E2EIMPACT-003A: A changed source file matching a rule selects that rule's impact tag.
+- EX-E2EIMPACT-003B: A changed frontend source file matching no rule selects the full E2E fallback.
+
 Acceptance criteria:
 
 - AC-E2EIMPACT-003-01: Changed E2E spec files select those spec files directly.
@@ -91,6 +108,11 @@ Acceptance criteria:
 ### REQ-E2EIMPACT-004: Local Changed-Scope Integration
 
 Changed-scope validation must use the selector for Playwright E2E instead of hardcoding a template tag taxonomy.
+
+Behavior examples:
+
+- EX-E2EIMPACT-004A: Changed-scope dry-run output includes the selected Playwright command and reason.
+- EX-E2EIMPACT-004B: Full finalization still runs the complete E2E gate when Playwright E2E is enabled.
 
 Acceptance criteria:
 
@@ -133,3 +155,12 @@ Rules:
 Governance smoke tests for impact tags must use minimal fixtures.
 
 Do not copy the full repository into a temp directory. Copy only the scripts, baseline file, and minimal source/spec files needed for the smoke case.
+
+## Traceability Matrix
+
+| Requirement ID | Example IDs | Acceptance Criteria IDs | Planned Test Types |
+| --- | --- | --- | --- |
+| REQ-E2EIMPACT-001 | EX-E2EIMPACT-001A, EX-E2EIMPACT-001B | AC-E2EIMPACT-001-01, AC-E2EIMPACT-001-02, AC-E2EIMPACT-001-03 | Validator smoke, E2E metadata validation |
+| REQ-E2EIMPACT-002 | EX-E2EIMPACT-002A, EX-E2EIMPACT-002B | AC-E2EIMPACT-002-01, AC-E2EIMPACT-002-02, AC-E2EIMPACT-002-03, AC-E2EIMPACT-002-04, AC-E2EIMPACT-002-05 | Validator smoke |
+| REQ-E2EIMPACT-003 | EX-E2EIMPACT-003A, EX-E2EIMPACT-003B | AC-E2EIMPACT-003-01, AC-E2EIMPACT-003-02, AC-E2EIMPACT-003-03, AC-E2EIMPACT-003-04, AC-E2EIMPACT-003-05 | Selector smoke, changed-scope dry run |
+| REQ-E2EIMPACT-004 | EX-E2EIMPACT-004A, EX-E2EIMPACT-004B | AC-E2EIMPACT-004-01, AC-E2EIMPACT-004-02, AC-E2EIMPACT-004-03, AC-E2EIMPACT-004-04 | Changed-scope validation, full finalization |

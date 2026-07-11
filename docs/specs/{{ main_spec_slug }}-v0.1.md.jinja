@@ -1,6 +1,7 @@
 # {{ main_spec_title }}
 
 Status: Draft
+Traceability: Required
 
 ## 1. Purpose
 
@@ -12,15 +13,39 @@ This spec is the current product and implementation intent. Keep it short enough
 
 TODO: Describe the primary user and the workflow this project should make easier.
 
-## 3. Current Scope
+## 3. Functional Requirements
+
+### REQ-PROJECT-001: Current Scope Is Explicit
+
+- Description: The project spec must record current product scope, non-goals, contracts, architecture boundaries, and validation strategy before implementation work relies on them.
+- Rationale: A short current-intent spec gives agents and maintainers a stable source of truth.
+
+Behavior examples:
+
+- EX-PROJECT-001A: A non-trivial feature is proposed; the spec records the intended behavior and acceptance criteria before planning.
+- EX-PROJECT-001B: A tempting future direction appears; the spec records it as a non-goal instead of letting scope drift.
+
+Acceptance criteria:
+
+- AC-PROJECT-001-01: Current in-scope behavior is listed here or in a linked focused spec.
+- AC-PROJECT-001-02: Non-goals are explicit enough to prevent adjacent implementation drift.
+- AC-PROJECT-001-03: Validation expectations reference the local changed-scope and full finalization commands.
+
+Test requirements:
+
+- Unit: TODO after product code exists.
+- Integration: TODO after product code exists.
+- E2E or manual: TODO after a user-visible workflow exists.
+
+## 4. Current Scope
 
 TODO: List the behavior that is in scope for the current version.
 
-## 4. Non-goals
+## 5. Non-goals
 
 TODO: List tempting directions that are explicitly out of scope for now.
 
-## 5. Data And Contracts
+## 6. Data And Contracts
 
 Define the authoritative shape for every API payload before frontend code consumes it.
 
@@ -34,7 +59,7 @@ Do not hand-write frontend DTOs that duplicate backend responses. Update backend
 {% else -%}
 TODO: Choose exactly one DTO/source-of-truth strategy before backend and frontend integrate: generated OpenAPI types, a shared schema package, typed RPC, GraphQL codegen, or another explicit contract. Add a generation/freshness check before feature code depends on the contract.
 {% endif %}
-## 6. Architecture Boundaries
+## 7. Architecture Boundaries
 
 Before scaffolding code, define the initial feature/layer map in [Architecture Layering v0.1](./architecture-layering-v0.1.md).
 
@@ -44,7 +69,7 @@ Rules that should hold from the first implementation:
 - cross-cutting concerns should enter through explicit providers or interfaces.
 - hand-written product source files should stay at or below 300 lines; split by layer, route, component, or helper before exceeding that limit.
 
-## 7. Validation Strategy
+## 8. Validation Strategy
 
 Use `./scripts/validate-changed-scope.mjs` before marking local implementation work complete. Use `./scripts/finalize.sh` as the check-only CI/pre-merge full gate.
 
@@ -54,6 +79,21 @@ Run `./scripts/smoke.sh` after changes to startup, routing, environment wiring, 
 Explicitly evaluate Playwright E2E for this frontend. Enable it after the frontend can start reliably and at least one stable user journey exists; otherwise record the deferral reason. See [E2E Testing Task](../tasks/e2e-testing.md).
 
 {% endif -%}
-## 8. Open Questions
+## 9. Traceability Matrix
+
+| Requirement ID | Example IDs | Acceptance Criteria IDs | Planned Test Types |
+| --- | --- | --- | --- |
+| REQ-PROJECT-001 | EX-PROJECT-001A, EX-PROJECT-001B | AC-PROJECT-001-01, AC-PROJECT-001-02, AC-PROJECT-001-03 | Unit, Integration, E2E or manual |
+
+## 10. Referenced Docs And Principles
+
+- Routed docs read set: `docs/README.md`, `docs/research/engineering-principles.md`, this spec, and route-specific specs or tasks.
+- Engineering principles IDs: TODO.
+{% if frontend_stack != 'none' -%}
+- HCI principle IDs: TODO when frontend or interaction behavior changes.
+{% else -%}
+- HCI principle IDs: Not applicable until a frontend or interaction surface exists.
+{% endif %}
+## 11. Open Questions
 
 - TODO: Capture unresolved product or architecture questions with enough context to answer later.

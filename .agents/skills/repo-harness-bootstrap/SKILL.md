@@ -1,6 +1,6 @@
 ---
 name: repo-harness-bootstrap
-description: "Bootstrap a new repository with an agent-legible harness: short AGENTS.md entrypoint, progressive docs/specs/decisions/tasks/exec-plans, mandatory changed-scope validation, check-only full finalization, scaffold planning, DTO/source-of-truth guidance, layer-direction rules, maintainability checks, and explicit Playwright E2E evaluation. Use when creating a fresh repo or applying the harness-template Copier project before the project-specific architecture settles."
+description: "Bootstrap a new repository with an agent-legible harness: short AGENTS.md entrypoint, progressive docs/specs/decisions/tasks/exec-plans/research, spec traceability, mandatory changed-scope validation, check-only full finalization, scaffold planning, DTO/source-of-truth guidance, layer-direction rules, maintainability checks, and explicit Playwright E2E evaluation. Use when creating a fresh repo or applying the harness-template Copier project before the project-specific architecture settles."
 ---
 
 # Repo Harness Bootstrap
@@ -45,12 +45,18 @@ Create these entry points:
   current enforcement.
 - `docs/specs/agent-governance-v0.1.md`: how to change conventions, docs,
   checks, generated artifacts, and agent-facing files.
+- `docs/SPEC_TEMPLATE.md` and `docs/TRACEABILITY_GUIDE.md`: requirement,
+  example, acceptance, plan, code, and test mapping conventions.
+- `docs/research/engineering-principles.md` and
+  `docs/research/hci-principles.md`: reusable principles for routed context.
 - `docs/decisions/`: short ADR-style rationale.
 - `docs/tasks/`: repeatable workflows, especially scaffold planning, schema
   generation, alignment checks, and E2E testing when a frontend exists.
 - `docs/exec-plans/`: living execution plans for multi-hour features, major
   refactors, or cross-area changes.
 - `./scripts/validate-changed-scope.mjs`: mandatory local completion check.
+- `./scripts/validate-traceability-structure.mjs`: baseline structure check
+  for specs marked `Traceability: Required`.
 - `./scripts/validate-agent-governance.mjs`: agent-facing docs alignment check.
 - `./scripts/finalize.sh`: check-only CI/pre-merge full gate.
 - runtime feedback scripts such as `scripts/dev.sh`, `scripts/check-health.sh`,
@@ -106,6 +112,8 @@ actionable messages.
 Typical checks:
 
 - markdown lint for `AGENTS.md`, README files, and `docs/**/*.md`.
+- traceability structure validation for behavior specs marked
+  `Traceability: Required`.
 - backend format/build/test gates.
 - frontend format/lint/check/build gates.
 - generated API contract generation and freshness checks.
@@ -129,9 +137,10 @@ After bootstrapping:
 1. Render the template or inspect the edited repo.
 2. Run Markdown lint when available.
 3. Run syntax checks for shell and Node scripts when present.
-4. Run generated `validate-layering.mjs` directly when it does not require
+4. Run generated `validate-traceability-structure.mjs --strict`.
+5. Run generated `validate-layering.mjs` directly when it does not require
    missing app files.
-5. Run `./scripts/validate-changed-scope.mjs` when the generated repo has enough
+6. Run `./scripts/validate-changed-scope.mjs` when the generated repo has enough
    scaffolded files for it to select meaningful checks.
-6. Do not run full stack checks until the selected stack has been scaffolded.
-7. Report deferred checks with concrete activation criteria.
+7. Do not run full stack checks until the selected stack has been scaffolded.
+8. Report deferred checks with concrete activation criteria.

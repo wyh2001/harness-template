@@ -1,0 +1,85 @@
+# Engineering Principles For Agent-Guided Delivery
+
+## Purpose
+
+This memo defines global engineering principles for all lanes, not only frontend interaction work.
+
+Use these principles together with `docs/README.md` and lane-specific docs.
+
+## How To Use
+
+- Cite principle IDs in spec, plan, writer, and critic outputs.
+- Apply only principles relevant to the current change.
+- Record explicit tradeoffs when principles conflict.
+
+## Principles
+
+### E1. Enforce Clear Boundaries
+
+- Keep module responsibilities explicit.
+- Do not bypass established boundaries for short-term speed.
+- Prefer narrow interfaces and predictable dependency direction.
+- When a code file exceeds 500 lines and mixes more than one domain
+  responsibility, strongly consider splitting it even if it remains under the
+  hard file-length limit.
+
+### E2. Validate At Boundaries
+
+- Parse and validate external input at system boundaries.
+- Fail fast with actionable errors.
+- Keep internal data typed and trusted after validation.
+
+### E3. Keep Behavior Observable
+
+- Add logs, metrics, and test evidence for changed critical behavior.
+- Make failures diagnosable without guessing hidden state.
+- Prefer explicit state transitions over implicit side effects.
+
+### E4. Preserve Determinism For Core Flows
+
+- Keep key recommendation and transformation logic reproducible.
+- Avoid hidden randomness unless explicitly required and documented.
+- Where randomization is needed, make seed and policy explicit.
+
+### E5. Optimize For Safe Iteration
+
+- Deliver in small vertical slices with independent validation.
+- Keep each slice rollback-friendly.
+- Prefer additive changes before destructive migration.
+
+### E6. Require Executable Evidence
+
+- Acceptance is behavior, not just code diff.
+- Every changed critical behavior needs automated tests or explicit manual verification steps.
+- Validation output must be included in writer evidence.
+
+### E7. Make Contracts Explicit
+
+- Keep API and data contracts versioned and discoverable.
+- Document assumptions and non-goals in specs.
+- Avoid ambiguous terms without local definitions.
+
+### E8. Minimize Blast Radius
+
+- Keep edits scoped to the smallest safe boundary.
+- Do not mix unrelated refactors with behavior changes.
+- Use lane routing to isolate concerns.
+
+### E9. Protect Security And Privacy Defaults
+
+- Minimize data retention and surface area.
+- Avoid logging sensitive content.
+- Apply least privilege to external integrations.
+
+### E10. Keep Docs Fresh And Verifiable
+
+- Treat docs as operational artifacts.
+- Route from short index docs to focused source docs.
+- Add periodic freshness checks and contradiction detection.
+
+## References
+
+- OpenAI, Harness Engineering in an agent-first workflow.
+- OpenAI Cookbook, ExecPlans and living execution documents.
+- GitHub Docs, required status checks and protected branch gates.
+- Specification by Example and BDD discovery-formulation-automation loop.

@@ -1,0 +1,106 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+
+const workspaceRoot = process.cwd();
+const strictMode = process.argv.includes('--strict');
+const specsDir = path.join(workspaceRoot, 'docs', 'specs');
+const requiredTraceabilityPattern = /^Traceability:\s*Required\s*$/im;
+
+function walkMarkdownFiles(dirPath) {
+  const files = [];
+  if (!fs.existsSync(dirPath)) {
+    return files;
+  }
+
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walkMarkdownFiles(fullPath));
+      continue;
+    }
+
+    if (entry.name.endsWith('.md')) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function relativePath(fullPath) {
+  return path.relative(workspaceRoot, fullPath).replaceAll(path.sep, '/');
+}
+
+function validateSpecFile(filePath) {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const warnings = [];
+
+  if (!requiredTraceabilityPattern.test(content)) {
+    return { skipped: true, warnings };
+  }
+
+  if (!content.includes('REQ-')) {
+    warnings.push('missing requirement IDs (REQ-*)');
+  }
+
+  if (!content.includes('EX-')) {
+    warnings.push('missing behavior example IDs (EX-*)');
+  }
+
+  if (!content.includes('Traceability Matrix')) {
+    warnings.push('missing Traceability Matrix section');
+  }
+
+  if (!content.includes('Acceptance')) {
+    warnings.push('missing explicit acceptance criteria section');
+  }
+
+  return { skipped: false, warnings };
+}
+
+function main() {
+  const specFiles = walkMarkdownFiles(specsDir);
+  const findings = [];
+  let checkedCount = 0;
+  let skippedCount = 0;
+
+  if (specFiles.length === 0) {
+    findings.push('docs/specs: no markdown spec files found');
+  }
+
+  for (const specFile of specFiles) {
+    const { skipped, warnings } = validateSpecFile(specFile);
+    if (skipped) {
+      skippedCount += 1;
+      continue;
+    }
+
+    checkedCount += 1;
+    for (const warning of warnings) {
+      findings.push(`${relativePath(specFile)}: ${warning}`);
+    }
+  }
+
+  if (findings.length === 0) {
+    console.log(
+      `Traceability structure validation passed: ${checkedCount} required spec(s) checked, ${skippedCount} optional spec(s) skipped.`,
+    );
+    process.exit(0);
+  }
+
+  const modeLabel = strictMode ? 'ERROR' : 'WARNING';
+  console.log(`Traceability structure validation found ${findings.length} issue(s). Mode: ${modeLabel}`);
+  for (const finding of findings) {
+    console.log(`- ${finding}`);
+  }
+
+  if (strictMode) {
+    process.exit(1);
+  }
+
+  process.exit(0);
+}
+
+main();

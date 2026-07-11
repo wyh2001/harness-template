@@ -1,31 +1,113 @@
-# Docs Reading Guide
+# Agent Routing And Governance Map
 
-Start here before reading longer docs.
+## Purpose
 
-{{ project_name }} uses progressive disclosure for repository knowledge: this file is the entry point, specs describe current intended behavior, decisions explain why major choices were made, and tasks describe repeatable maintenance workflows.
+This guide keeps agent context small, predictable, and verifiable.
 
-For each project session, read these docs first:
+Use this map before spec, planning, implementation, and review work.
 
-1. [{{ main_spec_title }}](./specs/{{ main_spec_slug }}-v0.1.md) - Product scope, target user, current behavior, non-goals, and validation strategy.
-2. [Architecture Layering v0.1](./specs/architecture-layering-v0.1.md) - Dependency direction, ownership boundaries, and current enforcement.
-3. [Agent Governance v0.1](./specs/agent-governance-v0.1.md) - Repository harness, comment policy, generated artifacts, and validation principles.
+## Global Base Read Set
 
-When changing project conventions, validation scripts, architecture rules, generated schemas, or agent-facing docs, read [Agent Governance v0.1](./specs/agent-governance-v0.1.md).
+Always read this base set first:
 
-When changing specs, decisions, generated contracts, or code, keep the affected artifacts aligned in the same change. If that is not feasible, leave an explicit follow-up.
+1. `docs/README.md`
+2. `docs/research/engineering-principles.md`
+3. The most relevant file under `docs/specs`
+4. The relevant file under `docs/status` when available
 
-When checking whether docs, generated contracts, scripts, and code still align, use [Alignment Check Task](./tasks/alignment-check.md).
+For frontend or interaction scope, always add:
+
+1. `docs/research/hci-principles.md`
 
 Before marking local implementation work complete, run `./scripts/validate-changed-scope.mjs`. Use `./scripts/finalize.sh` for CI, pre-merge, or explicit full finalization.
 
-Before scaffolding a backend, frontend, feature slice, or validation gate, use [Scaffold Planning Task](./tasks/scaffold-planning.md).
+## Task Router
 
-For multi-hour features, major refactors, or cross-area changes, create and maintain a living execution plan under [Exec Plans](./exec-plans/README.md).
+### A) Product Scope Or Behavior
 
-When backend API shapes change, use [Schema Generation Task](./tasks/schema-generation.md).
-{% if frontend_stack != 'none' %}
-When a frontend exists, explicitly evaluate Playwright E2E with [E2E Testing Task](./tasks/e2e-testing.md) and [Playwright E2E Impact Tags](./specs/playwright-e2e-impact-tags.md). Enable it when stable user journeys exist; otherwise record the deferral reason.
+Read route-specific docs:
+
+1. `docs/specs/{{ main_spec_slug }}-v0.1.md`
+2. `docs/SPEC_TEMPLATE.md`
+3. `docs/TRACEABILITY_GUIDE.md`
+
+Use when changing current behavior, adding requirements, or deciding acceptance criteria.
+
+### B) Architecture, Layers, Or DTO Source Of Truth
+
+Read route-specific docs:
+
+1. `docs/specs/architecture-layering-v0.1.md`
+2. `docs/tasks/scaffold-planning.md`
+{% if include_api_contract | default(false) -%}
+3. `docs/tasks/schema-generation.md`
 {% endif %}
+Use when scaffolding code, changing dependency direction, or changing backend/frontend payload contracts.
+
+### C) Frontend, HCI, Or Interaction Work
+
+Read route-specific docs:
+
+1. `docs/research/hci-principles.md`
+2. `docs/specs/architecture-layering-v0.1.md`
+{% if frontend_stack != 'none' -%}
+3. `docs/tasks/e2e-testing.md`
+4. `docs/specs/playwright-e2e-impact-tags.md`
+{% endif %}
+Use when changing user-facing flows, controls, layout, browser behavior, or frontend runtime boundaries.
+
+### D) Validation, Governance, Or Agent-Facing Docs
+
+Read route-specific docs:
+
+1. `docs/specs/agent-governance-v0.1.md`
+2. `docs/tasks/alignment-check.md`
+
+Use when changing project conventions, validation scripts, generated artifacts, docs routing, or agent-facing files.
+
+## Spec And Traceability Standards
+
+For any non-trivial change, use:
+
+1. `docs/SPEC_TEMPLATE.md`
+2. `docs/TRACEABILITY_GUIDE.md`
+
+Only specs marked `Traceability: Required` are checked for full requirement, example, acceptance, and matrix structure. Use that marker for behavior specs, bug-fix specs, and validation specs where code or tests must map back to explicit intent.
+
+For multi-hour or cross-area changes, create a living execution plan under:
+
+1. `docs/exec-plans/active`
+2. `docs/exec-plans/completed`
+
+## Escalation Rules
+
+Expand reads beyond the minimum set only when one of these is true:
+
+- the change crosses two or more task groups above
+- a principle conflict appears
+- a status note contradicts the current spec
+- the change is architecture-impacting or likely irreversible
+- required traceability evidence cannot be produced from the current read set
+
+## Contradiction Policy
+
+If two source docs conflict:
+
+1. cite both file paths explicitly in the spec
+2. stop broad implementation work
+3. resolve contradiction in spec before continuing implementation
+
+## Output Contract For Agents
+
+For spec, planner, writer, and critic outputs include:
+
+- doc set used, with exact file paths
+- engineering principle IDs applied from `engineering-principles.md`
+- HCI principle IDs when frontend or interaction scope is involved
+- traceability links: requirement and example IDs -> plan steps -> code and tests
+- validation evidence, including commands run and observable outcomes
+- unresolved gaps and explicit follow-up action
+
 ## Specs
 
 - [{{ main_spec_title }}](./specs/{{ main_spec_slug }}-v0.1.md) - Product scope and intended current behavior.
@@ -45,6 +127,15 @@ When a frontend exists, explicitly evaluate Playwright E2E with [E2E Testing Tas
 - [Alignment Check Task](./tasks/alignment-check.md) - Checklist for detecting and fixing drift between docs, generated contracts, decisions, code, and checks.
 - [Scaffold Planning Task](./tasks/scaffold-planning.md) - Checklist for deciding layers, DTO ownership, and staged checks before asking an agent to scaffold code.
 - [Schema Generation Task](./tasks/schema-generation.md) - Workflow for regenerating OpenAPI and frontend API types.
-{% if frontend_stack != 'none' -%}
 - [E2E Testing Task](./tasks/e2e-testing.md) - Workflow for introducing and maintaining Playwright user-journey tests.
-{% endif -%}
+
+## Research
+
+- [Engineering Principles](./research/engineering-principles.md) - Global engineering constraints for agent-guided delivery.
+- [HCI Principles](./research/hci-principles.md) - Frontend and interaction design checklist.
+
+## Notes
+
+- This guide is for routing and context budgeting, not a substitute for specs.
+- Keep route entry docs short and stable. Put details in focused docs.
+- Run `node scripts/validate-agent-governance.mjs` and `node scripts/validate-traceability-structure.mjs --strict` to catch docs drift and required-spec traceability drift early.

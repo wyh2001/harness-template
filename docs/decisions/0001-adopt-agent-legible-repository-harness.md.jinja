@@ -16,12 +16,17 @@ The core harness files are:
 
 - `AGENTS.md`
 - `docs/README.md`
+- `docs/SPEC_TEMPLATE.md`
+- `docs/TRACEABILITY_GUIDE.md`
+- `docs/research/engineering-principles.md`
+- `docs/research/hci-principles.md`
 - `docs/specs/agent-governance-v0.1.md`
 - `docs/specs/architecture-layering-v0.1.md`
 - `docs/tasks/alignment-check.md`
 - `docs/tasks/scaffold-planning.md`
 - `docs/tasks/e2e-testing.md`
 - `scripts/validate-changed-scope.mjs`
+- `scripts/validate-traceability-structure.mjs`
 - `scripts/finalize.sh`
 - `scripts/dev.sh`
 - `scripts/smoke.sh`
@@ -31,6 +36,7 @@ The core harness files are:
 - Durable project knowledge belongs in repository docs, not only chat history.
 - Repeated conventions should become mechanical checks when practical.
 - `validate-changed-scope.mjs` is the mandatory local completion gate.
+- Non-trivial behavior changes should preserve requirement/example/acceptance traceability.
 - `finalize.sh` is the CI/pre-merge full gate and must remain check-only.
 - Runtime smoke checks stay separate from finalization because they start services and require free ports.
 - Some rules should be documented before scaffolding but mechanically enabled only after their target stack exists.

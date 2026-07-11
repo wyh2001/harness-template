@@ -258,6 +258,15 @@ function isMarkdownPath(repoPath) {
   return repoPath === 'AGENTS.md' || repoPath === 'README.md' || repoPath.endsWith('.md');
 }
 
+function isSpecOrTraceabilityPath(repoPath) {
+  return (
+    (repoPath.startsWith('docs/specs/') && repoPath.endsWith('.md')) ||
+    repoPath === 'docs/SPEC_TEMPLATE.md' ||
+    repoPath === 'docs/TRACEABILITY_GUIDE.md' ||
+    repoPath === 'scripts/validate-traceability-structure.mjs'
+  );
+}
+
 function isPlaywrightImpactGovernancePath(repoPath) {
   const e2eSpecPattern = new RegExp(`^${escapeRegExp(e2eTestDir)}/.*\\.(spec|test)\\.(mjs|js|ts|tsx|jsx)$`);
   return (
@@ -282,6 +291,7 @@ function buildPlan(changedFiles, options) {
   const rustBackendChanged = hasAnyChangedFile(changedFiles, isRustBackendPath);
   const dotnetBackendChanged = hasAnyChangedFile(changedFiles, isDotnetBackendPath);
   const governanceChanged = hasAnyChangedFile(changedFiles, isGovernancePath);
+  const specOrTraceabilityChanged = hasAnyChangedFile(changedFiles, isSpecOrTraceabilityPath);
   const playwrightImpactGovernanceChanged = includePlaywrightE2e && hasAnyChangedFile(changedFiles, isPlaywrightImpactGovernancePath);
   const layeringRulesChanged = changedFiles.some(
     (repoPath) => repoPath === 'docs/specs/architecture-layering-v0.1.md' || repoPath === 'scripts/validate-layering.mjs',
@@ -431,6 +441,12 @@ function buildPlan(changedFiles, options) {
   if (governanceChanged && pathExists('scripts/validate-agent-governance.mjs')) {
     addCommand(commands, 'agent-governance', 'node', ['scripts/validate-agent-governance.mjs'], {
       reason: 'docs, agents, scripts, or workflows changed',
+    });
+  }
+
+  if (specOrTraceabilityChanged && pathExists('scripts/validate-traceability-structure.mjs')) {
+    addCommand(commands, 'traceability-structure', 'node', ['scripts/validate-traceability-structure.mjs', '--strict'], {
+      reason: 'specs or traceability rules changed',
     });
   }
 

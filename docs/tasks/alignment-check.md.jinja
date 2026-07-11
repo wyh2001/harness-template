@@ -13,6 +13,7 @@ Use this task after spec changes, after larger feature work, after generated con
 - `AGENTS.md`
 - `docs/README.md`
 - affected specs
+- `docs/SPEC_TEMPLATE.md` and `docs/TRACEABILITY_GUIDE.md` when spec structure or traceability changes
 - affected decisions
 - affected code and tests
 - validation scripts
@@ -24,12 +25,13 @@ Use this task after spec changes, after larger feature work, after generated con
 1. Read `docs/README.md` to find the affected specs.
 2. Read the affected specs carefully enough to understand intended current behavior.
 3. Compare specs against generated contracts, code, focused tests, and scripts.
-4. Read relevant decisions only for rationale, tradeoffs, or historical context.
-5. If a decision conflicts with a spec, treat that as documentation drift.
-6. Update stale specs instead of adding override notes.
-7. Prefer deleting stale or duplicated text over adding more explanation.
-8. If drift cannot be fixed in the current change, leave an explicit follow-up with enough context.
-9. Run the smallest relevant checks, such as markdown lint, focused tests, API contract checks, or `./scripts/validate-changed-scope.mjs`; reserve `./scripts/finalize.sh` for explicit full finalization.
+4. Check whether changed requirements still map to examples, acceptance criteria, code, and tests.
+5. Read relevant decisions only for rationale, tradeoffs, or historical context.
+6. If a decision conflicts with a spec, treat that as documentation drift.
+7. Update stale specs instead of adding override notes.
+8. Prefer deleting stale or duplicated text over adding more explanation.
+9. If drift cannot be fixed in the current change, leave an explicit follow-up with enough context.
+10. Run the smallest relevant checks, such as markdown lint, traceability validation, focused tests, API contract checks, or `./scripts/validate-changed-scope.mjs`; reserve `./scripts/finalize.sh` for explicit full finalization.
 
 ## Output
 
