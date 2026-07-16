@@ -73,7 +73,7 @@ The repository harness includes:
 - Markdown lint for `AGENTS.md`, README files, and `docs/**/*.md`.
 - Traceability structure validation for specs marked `Traceability: Required` through `scripts/validate-traceability-structure.mjs`.
 {% if include_layering_validator -%}
-- Architecture layering and 300-line hand-written product source file checks through `scripts/validate-layering.mjs`.
+- Architecture layering and the default 700-line hand-written product source file check, with documented exceptions excluded, through `scripts/validate-layering.mjs`.
 {% endif -%}
 - `scripts/validate-changed-scope.mjs` as the mandatory local completion check.
 - `scripts/validate-agent-governance.mjs` to keep agent-facing docs aligned with the local completion rule.
@@ -188,7 +188,13 @@ invalid architecture
 
 ## 9. Maintainability Invariants
 
-Hand-written product source files should stay at or below 300 lines. Split by feature, layer, route, component, helper, fixture, or test journey before exceeding that limit.
+Hand-written product source files use 700 lines as the default maintainability threshold. Treat it as a prompt to extract cohesive feature, layer, route, component, helper, fixture, or test-journey boundaries rather than compressing code to reduce line count. Keep exceptions immediately after this default rule so future exceptions can be added without rewriting the rule itself.
+
+{% if backend_stack == 'rust' -%}
+Exception: Rust source is exempt from the generic line limit. Organize modules by
+domain and split them only when a real domain, ownership, reuse, or readability
+boundary appears. A cohesive Rust module may exceed 700 lines.
+{% endif -%}
 
 Generated files, lockfiles, build output, harness scripts, and package-manager output are exempt. If a generated file becomes a repeated editing target, replace that workflow with a smaller generated surface or a checked-in source template.
 

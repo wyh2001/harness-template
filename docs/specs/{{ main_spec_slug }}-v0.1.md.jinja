@@ -67,8 +67,10 @@ Rules that should hold from the first implementation:
 
 - lower layers must not import runtime, UI, transport, persistence, provider SDK, or framework boundary concerns unless that layer owns the boundary.
 - cross-cutting concerns should enter through explicit providers or interfaces.
-- hand-written product source files should stay at or below 300 lines; split by layer, route, component, or helper before exceeding that limit.
-
+- hand-written product source files use 700 lines as the default maintainability threshold; extract a cohesive layer, route, component, or helper before exceeding it.
+{% if backend_stack == 'rust' -%}
+- exception: Rust modules are organized by domain and are exempt from the generic line limit.
+{% endif %}
 ## 8. Validation Strategy
 
 Use `./scripts/validate-changed-scope.mjs` before marking local implementation work complete. Use `./scripts/finalize.sh` as the check-only CI/pre-merge full gate.

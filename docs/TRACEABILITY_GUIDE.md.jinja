@@ -14,15 +14,16 @@ Define a stable mapping from spec to plan to code to tests.
 
 ## Required Mapping
 
-Only specs marked with `Traceability: Required` are expected to satisfy the full structure check. Use that marker for behavior specs, bug-fix specs, and validation specs where changed code or tests must map back to explicit requirements. Leave reference, architecture, governance, or background docs unmarked unless they define behavior that needs this mapping.
+Only non-trivial changes with specs marked `Traceability: Required` are expected to satisfy the full structure check. Use that marker for behavior specs, bug-fix specs, and validation specs where changed code or tests must map back to explicit requirements. Leave trivial changes and reference, architecture, governance, or background docs unmarked unless they define behavior that needs this mapping.
 
-Every implemented change should preserve this chain:
+Every non-trivial implemented change should preserve this chain:
 
 1. Requirement ID in spec
 2. Example IDs linked to that requirement
-3. Planner steps mapped to requirement and example IDs
-4. Writer code and tests mapped back to requirement and example IDs
-5. Critic checks that no spec-plan-code-test drift exists
+3. Clarifier record with normalized assumptions and open questions, or an explicit `no clarification needed` decision
+4. Planner steps mapped to requirement and example IDs
+5. Writer code and tests mapped back to requirement and example IDs
+6. Critic checks that no spec-plan-code-test drift exists
 
 ## Minimum Output Contract
 
@@ -32,6 +33,13 @@ Spec output must include:
 - Example IDs
 - Acceptance criteria IDs
 - Planned test types
+
+Clarifier output must include:
+
+- Clarification decision
+- Normalized assumptions
+- Normalized open questions, or an explicit `none`
+- Planner handoff note
 
 Planner output must include:
 
@@ -49,6 +57,10 @@ Critic output must include:
 - Spec reference IDs for each finding
 
 ## Practical Annotation Patterns
+
+Use these annotations only for non-trivial changes governed by a
+`Traceability: Required` spec. Do not add requirement/example IDs or principle
+annotations to trivial edits merely to satisfy the workflow shape.
 
 Backend tests (C#):
 

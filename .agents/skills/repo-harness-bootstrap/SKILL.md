@@ -97,8 +97,11 @@ Do not silently skip these:
   codegen, or another explicit contract.
 - **Layering**: document dependency direction before scaffolding code that
   crosses boundaries.
-- **Maintainability**: keep hand-written product source files at or below 300
-  lines unless the repo chooses a different explicit rule.
+- **Maintainability**: use 700 lines as the default threshold for hand-written
+  product source files unless the repo chooses a different explicit rule. List
+  exceptions after the default rule. Rust is exempt: organize Rust modules by
+  domain and split them only at real domain, ownership, reuse, or readability
+  boundaries, not solely to satisfy a generic line limit.
 - **Frontend E2E**: if a frontend exists, explicitly evaluate Playwright. If
   stable browser journeys exist or are part of the first scaffold, install
   Playwright and wire `test:e2e`; otherwise record the deferral reason and
@@ -119,7 +122,8 @@ Typical checks:
 - generated API contract generation and freshness checks.
 - architecture-layer validator for dependency direction and direct `fetch` in
   UI files.
-- 300-line hand-written product source file check.
+- 700-line hand-written product source file check, excluding documented
+  exceptions such as Rust.
 - Playwright impact rules through `./scripts/playwright-impact-rules.mjs`,
   validation through `./scripts/validate-playwright-impact-tags.mjs`, and
   selection through `./scripts/select-playwright-impact-tests.mjs`, with

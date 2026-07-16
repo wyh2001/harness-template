@@ -45,6 +45,7 @@ cleanup() {
 }
 
 show_logs() {
+  :
 {% if backend_stack != 'none' -%}
   printf '\nAPI log:\n' >&2
   tail -n 80 "${LOG_DIR}/api.log" >&2 || true

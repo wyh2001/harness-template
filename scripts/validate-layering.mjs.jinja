@@ -7,7 +7,7 @@ const workspaceRoot = process.cwd();
 const backendStack = '{{ backend_stack }}';
 const frontendStack = '{{ frontend_stack }}';
 const frontendDir = '{{ frontend_dir | default("") }}';
-const maxHandWrittenSourceLines = 300;
+const maxNonRustHandWrittenSourceLines = 700;
 const findings = [];
 const featureValidationCache = new Map();
 
@@ -82,19 +82,17 @@ function validateFileSizeForDir(dirPath, predicate) {
     }
 
     const lineCount = countLines(readFile(filePath));
-    if (lineCount > maxHandWrittenSourceLines) {
+    if (lineCount > maxNonRustHandWrittenSourceLines) {
       addFinding(
         filePath,
-        `hand-written product source files must stay at or below ${maxHandWrittenSourceLines} lines; split this file by feature, layer, route, component, helper, or test journey (${lineCount} lines)`,
+        `non-Rust hand-written product source files must stay at or below ${maxNonRustHandWrittenSourceLines} lines; extract a cohesive feature, layer, route, component, helper, or test journey (${lineCount} lines)`,
       );
     }
   }
 }
 
 function validateHandWrittenSourceFileSizes() {
-{% if backend_stack == 'rust' %}
-  validateFileSizeForDir(path.join(workspaceRoot, 'crates'), (candidate) => candidate.endsWith('.rs'));
-{% elif backend_stack == 'dotnet' %}
+{% if backend_stack == 'dotnet' %}
   validateFileSizeForDir(path.join(workspaceRoot, 'backend'), (candidate) => candidate.endsWith('.cs'));
 {% endif %}
 {% if frontend_stack != 'none' %}

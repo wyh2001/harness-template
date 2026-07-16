@@ -52,7 +52,7 @@ Playwright is not wired into `finalize.sh` yet. Treat that as a deferred decisio
 - Tests should navigate like a user and assert visible outcomes.
 - Every spec must carry one or more project-defined `@impact-*` tags.
 - Avoid sleeps and timing guesses; rely on Playwright locators and web-first assertions.
-- Keep test files at or below the project 300-line product-source limit by splitting journeys or fixtures.
+- Use the project's default 700-line maintainability threshold for test files by splitting cohesive journeys or fixtures.
 - Store traces, screenshots, and videos as transient test artifacts, not committed files.
 - Scoped E2E is an iteration accelerator, not proof of full release readiness.
 

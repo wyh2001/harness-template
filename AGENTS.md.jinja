@@ -15,6 +15,29 @@ For non-trivial behavior changes, use `docs/SPEC_TEMPLATE.md` and `docs/TRACEABI
 
 Before scaffolding a new backend, frontend, feature slice, or validation gate, use `docs/tasks/scaffold-planning.md` to record layer direction, DTO/source-of-truth strategy, and checks that can be added now versus later.
 
+## Required Workflow
+
+For non-trivial behavior changes, follow this sequence:
+
+1. Spec
+2. Clarifier
+3. Plan
+4. Writer implementation
+5. Critic review
+
+Requirement, example, acceptance, and principle annotations are required only
+for this non-trivial workflow; do not add them to trivial edits merely for
+ceremony.
+
+## Ambiguity Constitution
+
+- Clarification is mandatory only when material ambiguity affects requirement
+  interpretation, acceptance outcomes, dependency choices, or delivery risk.
+- When ambiguity is not material, planning may proceed with an explicit
+  `no clarification needed` record.
+- Interpret instructions literally first. Clarify a broader or implied
+  interpretation before acting on it rather than silently substituting it.
+
 ## ExecPlan Rule
 
 For multi-hour features, major refactors, or cross-area changes, create an execution plan in:
@@ -201,7 +224,10 @@ Markdown:
 - Code should represent the system as it is; keep roadmap narrative in specs/status docs.
 - Prefer small indexed docs over one large instruction file.
 - Plan layer boundaries before scaffolding code; dependencies should not point backward through the documented layer direction.
-- Keep hand-written product source files at or below 300 lines; split by domain, layer, or helper before growing past that boundary.
+- Use 700 lines as the default maintainability threshold for hand-written product source files. Treat the threshold as a prompt to extract cohesive components or modules, not to compress code.
+{% if backend_stack == 'rust' -%}
+- Exception: Rust modules are organized by domain, not line count. Do not split a cohesive Rust module solely to satisfy the default threshold; split only at a real domain, ownership, reuse, or readability boundary.
+{% endif -%}
 - Add mechanical checks when a convention becomes important.
 - Treat validation gates as independent constraints: do not weaken, bypass, or rewrite them merely to make the current change pass.
 - If the user's request is ambiguous or the intended action is unclear, pause and confirm before proceeding; offer concise options when that helps the user decide.

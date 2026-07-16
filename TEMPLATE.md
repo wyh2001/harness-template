@@ -11,7 +11,8 @@ Reusable Copier template for the project harness conventions I keep rebuilding:
 - spec and traceability templates with lightweight structure validation.
 - markdown lint, Rust clippy/module docs, .NET gates, generated API contract checks, governance validation, and optional Playwright E2E impact rules, validation, and selection.
 - unified VS Code tasks, `dev.sh`, `smoke.sh`, and health checks.
-- governance docs for scaffold planning, comment policy, layering, DTO source-of-truth choices, 300-line product source limits, schema generation, and E2E testing.
+- governance docs for scaffold planning, comment policy, layering, DTO source-of-truth choices, a default 700-line product source threshold followed by documented exceptions such as domain-oriented Rust modules, schema generation, and E2E testing.
+- a repository-level `Spec -> Clarifier -> Plan -> Writer -> Critic` rule for non-trivial changes without tool-specific agent configuration.
 - template-local `.agents/skills/repo-harness-bootstrap` skill for bootstrapping fresh repos; Copier excludes it from generated projects.
 
 The template intentionally does not generate a root `package.json` or `pnpm-workspace.yaml`. Harness scripts discover tools such as `markdownlint-cli2` and `openapi-typescript` from PATH first, then fall back to `pnpm dlx` or `npx -y`.

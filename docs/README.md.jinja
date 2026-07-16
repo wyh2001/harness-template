@@ -74,6 +74,18 @@ For any non-trivial change, use:
 
 Only specs marked `Traceability: Required` are checked for full requirement, example, acceptance, and matrix structure. Use that marker for behavior specs, bug-fix specs, and validation specs where code or tests must map back to explicit intent.
 
+For those non-trivial changes, use this workflow:
+
+1. Spec
+2. Clarifier
+3. Plan
+4. Writer implementation
+5. Critic review
+
+Clarification is mandatory only for material ambiguity; otherwise record `no
+clarification needed` and continue. Trivial changes do not require traceability
+IDs, requirement/example comments, or principle annotations.
+
 For multi-hour or cross-area changes, create a living execution plan under:
 
 1. `docs/exec-plans/active`
@@ -99,7 +111,7 @@ If two source docs conflict:
 
 ## Output Contract For Agents
 
-For spec, planner, writer, and critic outputs include:
+For outputs in the non-trivial workflow, include:
 
 - doc set used, with exact file paths
 - engineering principle IDs applied from `engineering-principles.md`
@@ -107,6 +119,9 @@ For spec, planner, writer, and critic outputs include:
 - traceability links: requirement and example IDs -> plan steps -> code and tests
 - validation evidence, including commands run and observable outcomes
 - unresolved gaps and explicit follow-up action
+
+Clarifier output must record the clarification decision, normalized
+assumptions, normalized open questions, and a planner handoff note.
 
 ## Specs
 

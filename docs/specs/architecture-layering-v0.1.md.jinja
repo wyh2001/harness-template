@@ -161,7 +161,10 @@ Enforced now:
 {% if include_api_contract | default(false) -%}
 - Committed backend OpenAPI and frontend API types must match the current backend.
 {% endif %}
-- Hand-written product source files must stay at or below 300 lines. Generated files, lockfiles, build output, harness scripts, and package-manager output are excluded.
+- The default maintainability threshold for hand-written product source files is 700 lines. Generated files, lockfiles, build output, harness scripts, and package-manager output are excluded.
+{% if backend_stack == 'rust' -%}
+- Exception: Rust modules are organized and split by domain, ownership, reuse, and readability boundaries rather than the generic line limit.
+{% endif -%}
 
 Not enforced yet:
 
@@ -169,7 +172,7 @@ Not enforced yet:
 - Mandatory file shape for every feature.
 - Every provider boundary that has not appeared in production code yet.
 {% else -%}
-No mechanical layering validator is enabled yet. Add one when a convention becomes repeated and cheap to verify. The first rules to encode should be dependency direction and the 300-line limit for hand-written product source files.
+No mechanical layering validator is enabled yet. Add one when a convention becomes repeated and cheap to verify. The first rules to encode should be dependency direction, the default 700-line threshold for hand-written product source files, and its documented exceptions.
 {% endif %}
 ## 6. Runtime Feedback Loop
 

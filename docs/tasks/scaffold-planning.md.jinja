@@ -22,7 +22,10 @@ The planning output should distribute durable guidance to the right place: produ
    - tRPC or another typed RPC boundary,
    - GraphQL schema plus code generation.
 6. Add or plan a freshness check for the chosen contract strategy. If the backend/frontend do not exist yet, record the intended check and add it when the stack is scaffolded.
-7. Keep hand-written product source files at or below 300 lines. Split by domain, layer, route, component, or helper before growing a file past that limit.
+7. Use 700 lines as the default maintainability threshold for hand-written product source files. Extract a cohesive domain, layer, route, component, or helper before growing past it, then list any stack-specific exceptions.
+{% if backend_stack == 'rust' %}
+   - Exception: organize Rust modules by domain rather than line count.
+{% endif -%}
 {% if frontend_stack != 'none' -%}
 8. Explicitly evaluate Playwright for this frontend. If stable browser journeys exist or are part of the immediate scaffold, install Playwright, wire `test:e2e`, and tag specs with `@impact-*`; otherwise record why E2E is deferred and what condition will make it active. Do not wire browser E2E into `finalize.sh` until the frontend can start reliably and at least one stable user journey exists.
 {% endif %}
@@ -52,7 +55,7 @@ Direction:
   Components do not call fetch. Runtime does not import components. Service does not import runtime.
 
 Checks:
-  Active now: 300-line product source limit and frontend fetch/import layering checks.
+  Active now: default 700-line product source threshold with documented exceptions, plus frontend fetch/import layering checks.
   Deferred: Playwright journey for create/edit/delete after routes and seeded test data exist.
 ```
 
