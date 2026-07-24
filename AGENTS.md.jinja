@@ -149,6 +149,8 @@ Do not run `./scripts/dev.sh` or frontend `dev` commands just because frontend f
 
 When tests or runtime checks require backend or frontend services, do not assume the user's own server is already running or safe to reuse. Start the needed services through a dedicated script or process using an available isolated port, and shut down only the processes you started.
 
+When a Rust or other compiled program is compute-intensive or otherwise sensitive to optimization level, do not rely on debug builds for representative runtime verification. Prefer release or optimized commands such as `cargo test --release`, `cargo run --release`, `dotnet test -c Release`, or build the optimized artifact first and run that. Use debug builds only when the task specifically needs debug assertions, debugger-oriented behavior, or the fastest compile-feedback loop for a non-runtime concern.
+
 Check a running local stack:
 
 ```bash

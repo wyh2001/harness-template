@@ -120,6 +120,12 @@ Use:
 
 This remains the exhaustive CI/pre-merge gate and should not be optimized into a changed-scope shortcut.
 
+### Optimization-Sensitive Verification
+
+When a program is compute-intensive or otherwise has materially different runtime behavior, throughput, or timeout characteristics without compiler optimizations, prefer optimized or release-mode verification for commands that exercise those hot paths. Use commands such as `cargo test --release`, `cargo run --release`, `dotnet test -c Release`, or build the optimized artifact first and run it.
+
+Use debug builds only when the task specifically depends on debug assertions, debugger-oriented tooling, or the fastest compile-feedback loop for a non-runtime concern.
+
 ## 6. Documentation Style
 
 Docs should be indexed, cross-linked, and scoped.

@@ -102,6 +102,11 @@ Do not silently skip these:
   exceptions after the default rule. Rust is exempt: organize Rust modules by
   domain and split them only at real domain, ownership, reuse, or readability
   boundaries, not solely to satisfy a generic line limit.
+- **Optimization-sensitive verification**: if meaningful runtime behavior
+  depends on compiler optimizations, such as compute-heavy Rust code, document
+  that local runtime verification should prefer release or optimized commands
+  like `cargo test --release`, `cargo run --release`, `dotnet test -c Release`,
+  or a prebuilt optimized artifact.
 - **Frontend E2E**: if a frontend exists, explicitly evaluate Playwright. If
   stable browser journeys exist or are part of the first scaffold, install
   Playwright and wire `test:e2e`; otherwise record the deferral reason and
