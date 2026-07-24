@@ -29,6 +29,23 @@ Requirement, example, acceptance, and principle annotations are required only
 for this non-trivial workflow; do not add them to trivial edits merely for
 ceremony.
 
+## If Spawning A Sub-Agent
+
+This section applies only when sub-agent delegation has already been chosen for reasons established
+elsewhere. Its presence does not make delegation a default, recommendation, requirement, or option
+that must be actively considered.
+
+- If spawning a sub-agent, give it a concrete, bounded task that can proceed independently.
+- If one sub-agent is sufficient, do not add another. Add one only for separate critical-path work
+  that can run in parallel.
+- When selecting its model for routine search, inspection, log triage, focused test work, or
+  documentation checks, choose the lowest-cost available model that can reliably complete the
+  task. Prefer a runtime's balanced or everyday-work tier over its frontier tier, use low or medium
+  reasoning, and pass only the minimum necessary context.
+- Escalate model capability, reasoning effort, or inherited context only when complexity,
+  ambiguity, or risk requires it. If relative pricing is unavailable, describe the choice as
+  resource-conscious rather than promising billing savings.
+
 ## Ambiguity Constitution
 
 - Clarification is mandatory only when material ambiguity affects requirement
