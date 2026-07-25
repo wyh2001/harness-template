@@ -78,6 +78,15 @@ Use these principles together with `docs/README.md` and lane-specific docs.
 - Route from short index docs to focused source docs.
 - Add periodic freshness checks and contradiction detection.
 
+### E11. Avoid Hypothetical-First Engineering
+
+- Focus on concrete requirements and credible failures; avoid speculative scenarios.
+- Rank risk by harm, reversibility, blast radius, recovery cost, and evidence.
+- Treat safety/security/privacy/integrity, financial actions, external side effects, and irreversible changes as high-impact: handle robustly even if unlikely.
+- Use simplest correct handling for low-risk recoverable failures; avoid over-hardening.
+- Avoid duplicate side effects (writes/charges/messages/resource creation); redundant reads or idempotent retries are acceptable.
+- If a limitation is accepted, record assumptions, impact, and recovery path.
+
 ## References
 
 - OpenAI, Harness Engineering in an agent-first workflow.
