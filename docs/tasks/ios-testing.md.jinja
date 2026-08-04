@@ -28,6 +28,12 @@ Before adding a UI journey to the scheme-level suite:
 5. Prove the journey through `xcodebuild` on the fixed simulator and in the full gate.
 6. Add or update its broad XCTest impact area.
 
+For native, GPU, or UIKit/SwiftUI bridge failures, a saved value, callback,
+accessibility value, or generated artifact does not prove the rendered result.
+When practical, assert the owned visible output. Diagnose in order: persistent
+selection, derived input or artifact, native bridge, then rendered output, and
+do not change a later boundary before proving the earlier one works.
+
 Keep manual device checks for system-owned UI, permissions, hardware, real cloud assets, performance, and visual qualities that semantic assertions cannot establish.
 
 {% if include_xctest_impact_selection | default(false) -%}

@@ -53,6 +53,14 @@ Use these principles together with `docs/README.md` and lane-specific docs.
 - Acceptance is behavior, not just code diff.
 - Every changed critical behavior needs automated tests or explicit manual verification steps.
 - Validation output must be included in writer evidence.
+- For native, GPU, renderer, or UI-bridge failures, a saved value, callback,
+  accessibility value, or generated artifact does not by itself prove that the
+  user sees the intended result. When practical, make the failing evidence
+  assert the owned visible output; otherwise state the manual visual boundary
+  explicitly.
+- Locate rendering failures in boundary order: persistent or selected state,
+  derived input or artifact, native or renderer bridge, then visible output.
+  Do not try fixes beyond the first boundary proven to fail.
 
 ### E7. Make Contracts Explicit
 

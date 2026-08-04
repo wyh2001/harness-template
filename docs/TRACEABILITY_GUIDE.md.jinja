@@ -92,6 +92,9 @@ A plan fails gate if any implementation step lacks:
 Writer evidence fails gate if changed critical behavior lacks:
 
 - Test update or explicit manual verification with rationale
+- Visible-output evidence when the behavior crosses a native, GPU, renderer,
+  or UI bridge; intermediate state or generated artifacts are insufficient
+  unless the remaining manual visual boundary is stated explicitly
 
 ## Contradiction Handling
 
