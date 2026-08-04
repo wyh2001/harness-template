@@ -1,0 +1,37 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDir, '..');
+const projectPath = process.env.HARNESS_XCODE_PROJECT_PATH || path.join(repoRoot, '{{ swift_project_name | default("App") }}.xcodeproj');
+const workspacePath = process.env.HARNESS_XCODE_WORKSPACE_PATH || path.join(repoRoot, '{{ swift_project_name | default("App") }}.xcworkspace');
+const containerArgs = fs.existsSync(workspacePath)
+  ? ['-workspace', workspacePath]
+  : ['-project', projectPath];
+const derivedDataArgs = process.env.HARNESS_DERIVED_DATA_PATH
+  ? ['-derivedDataPath', process.env.HARNESS_DERIVED_DATA_PATH]
+  : [];
+
+const result = spawnSync(
+  'xcodebuild',
+  [
+    'build-for-testing',
+    ...containerArgs,
+    '-scheme',
+    '{{ swift_project_name | default("App") }}',
+    ...derivedDataArgs,
+    '-destination',
+    'generic/platform=iOS Simulator',
+  ],
+  { cwd: repoRoot, stdio: 'inherit' },
+);
+
+if (result.error) {
+  console.error(`Unable to start xcodebuild: ${result.error.message}`);
+  process.exit(1);
+}
+process.exit(result.status ?? 1);

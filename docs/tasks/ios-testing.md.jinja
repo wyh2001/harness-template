@@ -1,0 +1,52 @@
+# iOS Testing Task
+
+## Goal
+
+Keep Swift tool ownership, project generation, simulator selection, XCTest evidence, and user-data isolation explicit and reproducible. Prefer `swift-format` as the sole formatting owner. SwiftLint is optional; its formatting-style rules can overlap or conflict with `swift-format`, so either keep SwiftLint semantic-only or deliberately disable `swift-format` before assigning formatting ownership to SwiftLint.
+
+## Test Commands
+
+```bash
+./scripts/test.mjs unit
+./scripts/test.mjs ui
+./scripts/test.mjs all
+./scripts/test.mjs selected {{ swift_unit_test_target | default('AppTests') }}/ExampleTests
+```
+
+All local XCTest commands resolve the fixed simulator through `scripts/simulator.mjs`. CI must set `{{ swift_test_destination_env | default('APP_TEST_DESTINATION') }}` to an explicit destination already installed on the runner.
+
+`xcodebuild build-for-testing` proves that the app and test bundles compile; it is not evidence that tests ran or passed. Reports must distinguish `built`, `test bundle compiled`, and `tests passed`.
+
+## Deterministic UI Journeys
+
+Before adding a UI journey to the scheme-level suite:
+
+1. Inject deterministic fixture state through launch arguments or environment.
+2. Isolate persistence, preferences, accounts, files, and network responses from developer data.
+3. Add stable accessibility identifiers only when semantic labels are insufficient.
+4. Assert visible behavior rather than implementation details or fixed delays.
+5. Prove the journey through `xcodebuild` on the fixed simulator and in the full gate.
+6. Add or update its broad XCTest impact area.
+
+Keep manual device checks for system-owned UI, permissions, hardware, real cloud assets, performance, and visual qualities that semantic assertions cannot establish.
+
+{% if include_xctest_impact_selection | default(false) -%}
+## Changed-Scope Impact Areas
+
+`scripts/xctest-impact-rules.mjs` maps durable source responsibility patterns to focused XCTest source patterns. It deliberately starts empty: add the first rule with the first product source and focused test, then keep every product source, configured resource, test-support source, and XCTestCase covered.
+
+Run:
+
+```bash
+node scripts/validate-xctest-impact-rules.mjs --strict
+./scripts/validate-changed-scope.mjs --skip-ui-tests
+```
+
+`--skip-ui-tests` is an explicit local-iteration choice, not UI evidence. Run the relevant UI class/method or omit the option when the change needs UI proof. Full finalization remains exhaustive.{% endif %}
+
+## Project And Simulator Changes
+
+- Edit `{{ swift_project_spec_path | default('project.yml') }}`, never generated `.xcodeproj` internals.
+- Regenerate after changing targets, packages, settings, schemes, or source membership.
+- Keep `Package.resolved` tracked.
+- Create or update the fixed simulator only through an explicit decision and `./scripts/simulator.mjs create`.

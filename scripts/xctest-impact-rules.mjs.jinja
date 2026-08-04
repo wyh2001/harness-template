@@ -1,0 +1,19 @@
+// Impact areas are project-owned responsibility boundaries, not per-file mappings. A new file
+// inside an existing source pattern should inherit focused XCTest evidence automatically.
+export const xctestImpactConfig = {
+  productRoots: ['{{ swift_source_dir | default("Sources") }}'],
+  resourcePaths: [],
+  testSupportRoots: ['{{ swift_unit_test_target | default("AppTests") }}/TestSupport'],
+  unitTarget: '{{ swift_unit_test_target | default("AppTests") }}',
+  uiTarget: '{{ swift_ui_test_target | default("AppUITests") }}',
+};
+
+// Add broad, durable mappings after the first product sources and focused XCTest classes exist.
+// Example:
+// {
+//   name: 'app-lifecycle',
+//   description: 'Composition, launch state, and startup coordination.',
+//   sourcePatterns: [/^Sources\/App\//],
+//   testPatterns: [/^AppTests\/StartupCoordinatorTests\.swift$/],
+// }
+export const xctestImpactRules = [];

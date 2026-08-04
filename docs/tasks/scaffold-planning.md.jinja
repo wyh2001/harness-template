@@ -13,6 +13,7 @@ The planning output should distribute durable guidance to the right place: produ
 1. Confirm the selected stack and directories:
    - backend: `{% if backend_stack == 'none' %}not selected yet{% elif backend_stack == 'rust' %}Rust workspace under crates/{% else %}.NET solution at {{ dotnet_solution_path }}{% endif %}`
    - frontend: `{% if frontend_stack == 'none' %}not selected yet{% else %}{{ frontend_stack }} app under {{ frontend_dir }}{% endif %}`
+   - Swift app: `{% if swift_app_stack | default('none') == 'ios' %}iOS app generated from {{ swift_project_spec_path }}, with product sources under {{ swift_source_dir }}{% else %}not selected{% endif %}`
 2. Update `docs/specs/{{ main_spec_slug }}-v0.1.md` with the current product scope, user journeys, and data/contract ownership.
 3. Update `docs/specs/architecture-layering-v0.1.md` before creating code that crosses a new layer boundary.
 4. Define the dependency direction for each feature. Code should depend forward through the documented layers and must not reverse-import runtime/UI concerns into lower layers.
@@ -22,13 +23,15 @@ The planning output should distribute durable guidance to the right place: produ
    - tRPC or another typed RPC boundary,
    - GraphQL schema plus code generation.
 6. Add or plan a freshness check for the chosen contract strategy. If the backend/frontend do not exist yet, record the intended check and add it when the stack is scaffolded.
-7. Use 700 lines as the default maintainability threshold for hand-written product source files. Extract a cohesive domain, layer, route, component, or helper before growing past it, then list any stack-specific exceptions.
-{% if backend_stack == 'rust' %}
-   - Exception: organize Rust modules by domain rather than line count.
-{% endif -%}
-{% if frontend_stack != 'none' -%}
-8. Explicitly evaluate Playwright for this frontend. If stable browser journeys exist or are part of the immediate scaffold, install Playwright, wire `test:e2e`, and tag specs with `@impact-*`; otherwise record why E2E is deferred and what condition will make it active. Do not wire browser E2E into `finalize.sh` until the frontend can start reliably and at least one stable user journey exists.
-{% endif %}
+7. Use 700 lines as the default maintainability threshold for hand-written product source files. Extract a cohesive domain, layer, route, component, or helper before growing past it, then list any stack-specific exceptions.{% if backend_stack == 'rust' %}
+   - Exception: organize Rust modules by domain rather than line count.{% endif %}{% if frontend_stack != 'none' %}
+8. Explicitly evaluate Playwright for this frontend. If stable browser journeys exist or are part of the immediate scaffold, install Playwright, wire `test:e2e`, and tag specs with `@impact-*`; otherwise record why E2E is deferred and what condition will make it active. Do not wire browser E2E into `finalize.sh` until the frontend can start reliably and at least one stable user journey exists.{% endif %}{% if swift_app_stack | default('none') == 'ios' %}
+8. Define app composition, feature/view-model, domain/protocol, and data/platform adapter boundaries before adding Swift files.
+9. Keep project structure in `{{ swift_project_spec_path }}` and keep the localized display name separate from internal Xcode identifiers.
+10. Define deterministic XCTest fixtures that cannot read or mutate developer data. Record which system-owned or hardware behavior remains manual.
+11. Pin one local simulator through `scripts/simulator.mjs`; CI must provide its own explicit destination through `{{ swift_test_destination_env }}`.{% if include_xctest_impact_selection | default(false) %}
+12. Add broad XCTest impact areas with the first source/tests. Do not invent a per-file mapping and do not allow an unmapped source to fall back silently to a whole target.{% endif %}{% endif %}
+
 ## Example Output
 
 This is an example shape, not a required architecture. Replace names and layers with what the project actually needs.

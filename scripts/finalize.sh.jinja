@@ -18,6 +18,13 @@ require_path() {
   fi
 }
 
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    printf 'Missing required command: %s\n' "$1" >&2
+    exit 1
+  fi
+}
+
 cd "${REPO_ROOT}"
 
 {% if backend_stack == 'rust' -%}
@@ -85,6 +92,86 @@ print_stage "Frontend e2e"
 pnpm --dir {{ frontend_dir }} test:e2e
 
 {% endif -%}
+{% endif -%}
+{% if swift_app_stack | default('none') == 'ios' -%}
+require_path "{{ swift_project_spec_path }}" "Swift/iOS gates require {{ swift_project_spec_path }}."
+{% if include_swift_format | default(true) -%}
+require_path ".swift-format" "Swift formatting requires .swift-format."
+{% endif -%}
+require_command xcodegen
+require_command xcodebuild
+require_command xcrun
+require_command node
+
+SWIFT_GENERATED_DIR="$(mktemp -d "${TMPDIR:-/tmp}/{{ project_slug }}-xcodegen.XXXXXX")"
+cleanup_swift_generated_project() {
+  local cleanup_status=$?
+  trap - EXIT
+  if [[ -n "${SWIFT_GENERATED_DIR:-}" && "${SWIFT_GENERATED_DIR}" == "${TMPDIR:-/tmp}/{{ project_slug }}-xcodegen."* ]]; then
+    rm -rf -- "${SWIFT_GENERATED_DIR}"
+  fi
+  exit "${cleanup_status}"
+}
+trap cleanup_swift_generated_project EXIT
+
+run_swift_build_and_check_warnings() {
+  local build_log="${SWIFT_GENERATED_DIR}/xcodebuild.log"
+  local filtered_log="${SWIFT_GENERATED_DIR}/xcodebuild-filtered.log"
+
+  set +e
+  xcodebuild clean build \
+    -project "${SWIFT_GENERATED_DIR}/{{ swift_project_name }}.xcodeproj" \
+    -scheme "{{ swift_project_name }}" \
+    -disableAutomaticPackageResolution \
+    -derivedDataPath "${SWIFT_GENERATED_DIR}/DerivedData" \
+    -destination "generic/platform=iOS Simulator" \
+    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+    GCC_TREAT_WARNINGS_AS_ERRORS=YES | tee "${build_log}"
+  local build_status=${PIPESTATUS[0]}
+  set -e
+
+  if [[ ${build_status} -ne 0 ]]; then
+    return "${build_status}"
+  fi
+
+  grep -Ev 'warning: Metadata extraction skipped\. No AppIntents\.framework dependency found\.' \
+    "${build_log}" >"${filtered_log}" || true
+  if grep -Eq '(^|[[:space:]])warning:' "${filtered_log}"; then
+    printf 'iOS build produced warnings. Treating this as a finalize failure.\n' >&2
+    grep -E '(^|[[:space:]])warning:' "${filtered_log}" >&2
+    return 1
+  fi
+}
+
+print_stage "XcodeGen project validation"
+xcodegen generate \
+  --spec "{{ swift_project_spec_path }}" \
+  --project "${SWIFT_GENERATED_DIR}" \
+  --project-root "${REPO_ROOT}"
+
+{% if include_swift_format | default(true) -%}
+print_stage "Swift format"
+./scripts/format.sh --lint
+
+{% endif -%}
+{% if include_swiftlint | default(false) -%}
+print_stage "SwiftLint"
+./scripts/lint-swiftlint.sh
+
+{% endif -%}
+{% if include_xctest_impact_selection | default(false) -%}
+print_stage "XCTest impact areas"
+node scripts/validate-xctest-impact-rules.mjs --strict
+
+{% endif -%}
+print_stage "All XCTest targets"
+HARNESS_XCODE_PROJECT_PATH="${SWIFT_GENERATED_DIR}/{{ swift_project_name }}.xcodeproj" \
+HARNESS_DERIVED_DATA_PATH="${SWIFT_GENERATED_DIR}/DerivedData" \
+  ./scripts/test.mjs all
+
+print_stage "Clean warning-checked iOS build"
+run_swift_build_and_check_warnings
+
 {% endif -%}
 {% if include_layering_validator -%}
 print_stage "Architecture layering"

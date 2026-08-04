@@ -9,6 +9,18 @@ _exclude:
   - ".agents"
   - "node_modules"
   - "target"
+  - "{% if swift_app_stack != 'ios' or not include_swift_format %}.swift-format{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' or not include_swiftlint %}.swiftlint.yml{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' %}docs/decisions/0003-use-xcodegen-as-project-source.md{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' %}docs/decisions/0004-use-one-fixed-local-simulator.md{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' %}docs/tasks/ios-testing.md{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' %}scripts/build-for-testing.mjs{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' %}scripts/simulator.mjs{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' %}scripts/test.mjs{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' or not include_swiftlint %}scripts/lint-swiftlint.sh{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' or not include_xctest_impact_selection %}scripts/xctest-impact-rules.mjs{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' or not include_xctest_impact_selection %}scripts/select-xctest-impact-tests.mjs{% else %}__copier_never__{% endif %}"
+  - "{% if swift_app_stack != 'ios' or not include_xctest_impact_selection %}scripts/validate-xctest-impact-rules.mjs{% else %}__copier_never__{% endif %}"
 
 project_name:
   type: str
@@ -52,6 +64,110 @@ frontend_stack:
     Astro app with pnpm: astro
     No frontend yet: none
   default: vite
+
+swift_app_stack:
+  type: str
+  help: Apple-platform Swift app harness to add alongside any backend or web frontend.
+  choices:
+    iOS app generated with XcodeGen: ios
+    No Swift app: none
+  default: none
+
+swift_project_name:
+  type: str
+  help: Internal Xcode project, scheme, and product name; keep localized display names separate.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: "{{ project_name | replace(' ', '') }}"
+
+swift_project_spec_path:
+  type: str
+  help: XcodeGen specification path relative to the repository root.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: project.yml
+
+swift_source_dir:
+  type: str
+  help: Root directory containing hand-written Swift product sources.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: Sources
+
+swift_unit_test_target:
+  type: str
+  help: XCTest unit-test target and default source-directory name.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: "{{ swift_project_name }}Tests"
+
+swift_ui_test_target:
+  type: str
+  help: XCTest UI-test target and default source-directory name.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: "{{ swift_project_name }}UITests"
+
+swift_smoke_test_identifier:
+  type: str
+  help: Stable XCTest target/class identifier used by scripts/smoke.sh after that test exists.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: "{{ swift_unit_test_target }}/StartupSmokeTests"
+
+swift_test_destination_env:
+  type: str
+  help: Environment variable through which CI supplies its explicit xcodebuild destination.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: "{{ project_slug | upper | replace('-', '_') }}_TEST_DESTINATION"
+
+swift_simulator_name:
+  type: str
+  help: Stable local simulator name. The simulator UUID is discovered locally and never committed.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: "{{ swift_project_name }}-iPhone"
+
+swift_simulator_device_name:
+  type: str
+  help: Pinned local simulator device type name installed with the selected Xcode.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: iPhone 17
+
+swift_simulator_device_identifier:
+  type: str
+  help: CoreSimulator device type identifier matching the pinned device name.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: com.apple.CoreSimulator.SimDeviceType.iPhone-17
+
+swift_simulator_runtime_name:
+  type: str
+  help: Pinned local simulator runtime name installed with the selected Xcode.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: iOS 26.1
+
+swift_simulator_runtime_identifier:
+  type: str
+  help: CoreSimulator runtime identifier matching the pinned runtime name.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: com.apple.CoreSimulator.SimRuntime.iOS-26-1
+
+swift_ci_destination:
+  type: str
+  help: Explicit simulator destination available on the GitHub macOS runner.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: "platform=iOS Simulator,name=iPhone 16 Pro,OS=latest"
+
+include_swift_format:
+  type: bool
+  help: Use swift-format as the Swift formatting owner (recommended). Disable it only when another formatter or a deliberately formatting-enabled SwiftLint configuration owns formatting.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: true
+
+include_swiftlint:
+  type: bool
+  help: Optionally add SwiftLint. Its formatting-style rules can overlap or conflict with swift-format, so the generated config enables only a small semantic rule set; reconsider include_swift_format before expanding SwiftLint into formatting.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: false
+
+include_xctest_impact_selection:
+  type: bool
+  help: Require project-owned impact areas that map changed Swift boundaries to focused XCTest classes.
+  when: "{{ swift_app_stack == 'ios' }}"
+  default: true
 
 frontend_dir:
   type: str

@@ -15,6 +15,19 @@ FRONTEND_PORT="${FRONTEND_PORT:-{{ frontend_port }}}"
 FRONTEND_BASE_URL="http://${FRONTEND_HOST}:${FRONTEND_PORT}"
 {% endif %}
 
+{% if swift_app_stack | default('none') == 'ios' -%}
+cd "${REPO_ROOT}"
+xcodegen generate --spec "{{ swift_project_spec_path }}"
+if [[ -d "{{ swift_project_name }}.xcworkspace" ]]; then
+  open "{{ swift_project_name }}.xcworkspace"
+else
+  open "{{ swift_project_name }}.xcodeproj"
+fi
+{% if backend_stack == 'none' and frontend_stack == 'none' -%}
+exit 0
+{% endif %}
+
+{% endif -%}
 PIDS=()
 
 check_children_alive() {

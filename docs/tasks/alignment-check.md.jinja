@@ -16,10 +16,10 @@ Use this task after spec changes, after larger feature work, after generated con
 - `docs/SPEC_TEMPLATE.md` and `docs/TRACEABILITY_GUIDE.md` when spec structure or traceability changes
 - affected decisions
 - affected code and tests
-- validation scripts
-{% if include_api_contract | default(false) -%}
-- generated contracts when API shape is involved
-{% endif %}
+- validation scripts{% if include_api_contract | default(false) %}
+- generated contracts when API shape is involved{% endif %}{% if swift_app_stack | default('none') == 'ios' %}
+- `{{ swift_project_spec_path }}`, generated-project reproducibility, pinned simulator policy, and XCTest impact areas when iOS project/test structure is involved{% endif %}
+
 ## Checklist
 
 1. Read `docs/README.md` to find the affected specs.
@@ -31,7 +31,7 @@ Use this task after spec changes, after larger feature work, after generated con
 7. Update stale specs instead of adding override notes.
 8. Prefer deleting stale or duplicated text over adding more explanation.
 9. If drift cannot be fixed in the current change, leave an explicit follow-up with enough context.
-10. Run the smallest relevant checks, such as markdown lint, traceability validation, focused tests, API contract checks, or `./scripts/validate-changed-scope.mjs`; reserve `./scripts/finalize.sh` for explicit full finalization.
+10. Run the smallest relevant checks, such as markdown lint, traceability validation, focused tests, API contract checks, XcodeGen/XCTest impact checks, or `./scripts/validate-changed-scope.mjs`; reserve `./scripts/finalize.sh` for explicit full finalization.
 
 ## Output
 

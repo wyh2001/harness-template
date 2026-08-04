@@ -19,6 +19,13 @@ LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/{{ project_slug }}-smoke.XXXXXX")"
 
 PIDS=()
 
+{% if swift_app_stack | default('none') == 'ios' -%}
+cd "${REPO_ROOT}"
+xcodegen generate --spec "{{ swift_project_spec_path }}"
+./scripts/test.mjs selected "{{ swift_smoke_test_identifier }}"
+
+{% endif -%}
+
 check_port_free() {
   local label="$1"
   local port="$2"

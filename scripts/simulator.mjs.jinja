@@ -1,0 +1,123 @@
+#!/usr/bin/env node
+
+import { spawnSync } from 'node:child_process';
+
+const simulator = Object.freeze({
+  name: '{{ swift_simulator_name | default("App-iPhone") }}',
+  deviceTypeName: '{{ swift_simulator_device_name | default("iPhone 17") }}',
+  deviceTypeIdentifier: '{{ swift_simulator_device_identifier | default("com.apple.CoreSimulator.SimDeviceType.iPhone-17") }}',
+  runtimeName: '{{ swift_simulator_runtime_name | default("iOS 26.1") }}',
+  runtimeIdentifier: '{{ swift_simulator_runtime_identifier | default("com.apple.CoreSimulator.SimRuntime.iOS-26-1") }}',
+});
+
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+
+function runSimctl(args) {
+  const result = spawnSync('xcrun', ['simctl', ...args], { encoding: 'utf8' });
+  if (result.error) fail(`Unable to start simctl: ${result.error.message}`);
+  if (result.status !== 0) {
+    const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.status}`;
+    fail(`simctl ${args.join(' ')} failed: ${detail}`);
+  }
+  return result.stdout.trim();
+}
+
+function readList(kind) {
+  try {
+    return JSON.parse(runSimctl(['list', '-j', kind]));
+  } catch (error) {
+    fail(`Unable to parse simctl ${kind} output: ${error.message}`);
+  }
+}
+
+function allDevices() {
+  const devicesByRuntime = readList('devices').devices ?? {};
+  return Object.entries(devicesByRuntime).flatMap(([runtimeIdentifier, devices]) =>
+    devices.map((device) => ({ ...device, runtimeIdentifier })),
+  );
+}
+
+function configuredDevice({ required = true } = {}) {
+  const sameName = allDevices().filter((device) => device.name === simulator.name);
+  const exact = sameName.filter((device) => device.runtimeIdentifier === simulator.runtimeIdentifier);
+
+  if (exact.length > 1) fail(`Multiple ${simulator.name} devices exist for ${simulator.runtimeName}; keep exactly one.`);
+  if (exact.length === 0) {
+    if (sameName.length > 0) fail(`${simulator.name} exists with a different runtime. Rename or remove it before setup.`);
+    if (required) fail(`${simulator.name} is missing. Create it explicitly with ./scripts/simulator.mjs create.`);
+    return undefined;
+  }
+
+  const device = exact[0];
+  if (device.deviceTypeIdentifier && device.deviceTypeIdentifier !== simulator.deviceTypeIdentifier) {
+    fail(`${simulator.name} exists with the wrong device type; expected ${simulator.deviceTypeName}.`);
+  }
+  if (device.isAvailable === false) fail(`${simulator.name} exists but is unavailable.`);
+  return device;
+}
+
+function verifyConfigurationExists() {
+  const runtime = (readList('runtimes').runtimes ?? []).find(
+    (candidate) => candidate.identifier === simulator.runtimeIdentifier,
+  );
+  if (!runtime || runtime.isAvailable === false) fail(`Required simulator runtime is unavailable: ${simulator.runtimeName}.`);
+
+  const deviceType = (readList('devicetypes').devicetypes ?? []).find(
+    (candidate) => candidate.identifier === simulator.deviceTypeIdentifier,
+  );
+  if (!deviceType) fail(`Required simulator device type is unavailable: ${simulator.deviceTypeName}.`);
+}
+
+function create() {
+  verifyConfigurationExists();
+  const existing = configuredDevice({ required: false });
+  if (existing) {
+    console.log(`Using existing ${simulator.name}: ${existing.udid}`);
+    return;
+  }
+
+  const udid = runSimctl(['create', simulator.name, simulator.deviceTypeIdentifier, simulator.runtimeIdentifier]);
+  const created = configuredDevice();
+  if (created.udid !== udid) fail(`Created simulator UUID did not match simctl output: ${udid}.`);
+  console.log(`Created ${simulator.name}: ${created.udid}`);
+  console.log(`Device type: ${simulator.deviceTypeName}`);
+  console.log(`Runtime: ${simulator.runtimeName}`);
+}
+
+function status() {
+  const device = configuredDevice();
+  console.log(`${simulator.name}: ${device.udid}`);
+  console.log(`Device type: ${simulator.deviceTypeName}`);
+  console.log(`Runtime: ${simulator.runtimeName}`);
+  console.log(`State: ${device.state}`);
+}
+
+function shutdown() {
+  const device = configuredDevice();
+  if (device.state === 'Shutdown') {
+    console.log(`${simulator.name} is already Shutdown.`);
+    return;
+  }
+  runSimctl(['shutdown', device.udid]);
+  console.log(`Shut down ${simulator.name}.`);
+}
+
+switch (process.argv[2]) {
+case 'create':
+  create();
+  break;
+case 'id':
+  console.log(configuredDevice().udid);
+  break;
+case 'status':
+  status();
+  break;
+case 'shutdown':
+  shutdown();
+  break;
+default:
+  fail('Usage: ./scripts/simulator.mjs <create|id|status|shutdown>');
+}

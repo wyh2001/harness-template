@@ -10,18 +10,62 @@ print_stage() {
 
 cd "${REPO_ROOT}"
 
+MODE="format"
+if [[ "${1:-}" == "--lint" ]]; then
+  MODE="lint"
+  shift
+fi
+
 {% if backend_stack == 'rust' -%}
 print_stage "Rust format"
+if [[ "${MODE}" == "lint" ]]; then
+  cargo fmt --all --check
+else
 cargo fmt --all
+fi
 
 {% elif backend_stack == 'dotnet' -%}
 print_stage "Backend format"
+if [[ "${MODE}" == "lint" ]]; then
+  dotnet format {{ dotnet_solution_path }} --verify-no-changes
+else
 dotnet format {{ dotnet_solution_path }}
+fi
 
 {% endif -%}
 {% if frontend_stack != 'none' -%}
 print_stage "Frontend format"
+if [[ "${MODE}" == "lint" ]]; then
+  pnpm --dir {{ frontend_dir }} format:check
+else
 pnpm --dir {{ frontend_dir }} format
+fi
+
+{% endif -%}
+{% if swift_app_stack | default('none') == 'ios' and include_swift_format | default(true) -%}
+CONFIG_PATH="${REPO_ROOT}/.swift-format"
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+  printf 'Missing formatter configuration: %s\n' "${CONFIG_PATH}" >&2
+  exit 1
+fi
+if command -v swift-format >/dev/null 2>&1; then
+  SWIFT_FORMAT_BIN="$(command -v swift-format)"
+else
+  SWIFT_FORMAT_BIN="$(xcrun --find swift-format)"
+fi
+
+SWIFT_TARGETS=("{{ swift_source_dir }}" "{{ swift_unit_test_target }}" "{{ swift_ui_test_target }}")
+if [[ $# -gt 0 ]]; then
+  SWIFT_TARGETS=("$@")
+fi
+
+if [[ "${MODE}" == "lint" ]]; then
+  print_stage "Swift format check"
+  "${SWIFT_FORMAT_BIN}" lint --recursive --parallel --configuration "${CONFIG_PATH}" "${SWIFT_TARGETS[@]}"
+else
+  print_stage "Swift format"
+  "${SWIFT_FORMAT_BIN}" format --in-place --recursive --parallel --configuration "${CONFIG_PATH}" "${SWIFT_TARGETS[@]}"
+fi
 
 {% endif -%}
 print_stage "Formatting complete"

@@ -1,0 +1,176 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { xctestImpactConfig, xctestImpactRules } from './xctest-impact-rules.mjs';
+
+function isUnderRoot(filePath, root) {
+  return filePath === root || filePath.startsWith(`${root}/`);
+}
+
+function isProductSource(filePath) {
+  return (
+    (filePath.endsWith('.swift') && xctestImpactConfig.productRoots.some((root) => isUnderRoot(filePath, root))) ||
+    xctestImpactConfig.resourcePaths.includes(filePath)
+  );
+}
+
+function targetForTestPath(filePath) {
+  if (isUnderRoot(filePath, xctestImpactConfig.unitTarget) && filePath.endsWith('.swift')) {
+    return xctestImpactConfig.unitTarget;
+  }
+  if (isUnderRoot(filePath, xctestImpactConfig.uiTarget) && filePath.endsWith('.swift')) {
+    return xctestImpactConfig.uiTarget;
+  }
+  return null;
+}
+
+function isTestSupportPath(filePath) {
+  return xctestImpactConfig.testSupportRoots.some((root) => isUnderRoot(filePath, root));
+}
+
+function changedPaths(change) {
+  return [change.path, change.previousPath].filter(Boolean);
+}
+
+function walkSwift(workspaceRoot, relativeDirectory) {
+  const absoluteDirectory = path.join(workspaceRoot, relativeDirectory);
+  if (!fs.existsSync(absoluteDirectory)) return [];
+  return fs.readdirSync(absoluteDirectory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = path.join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) return walkSwift(workspaceRoot, relativePath);
+    return entry.name.endsWith('.swift') ? [relativePath.replaceAll(path.sep, '/')] : [];
+  });
+}
+
+function classIdentifiersForTestFile(workspaceRoot, filePath, target) {
+  const absolutePath = path.join(workspaceRoot, filePath);
+  if (!fs.existsSync(absolutePath)) return [];
+  const content = fs.readFileSync(absolutePath, 'utf8');
+  const classes = new Set();
+  const pattern =
+    /\b(?:final\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^\n{]*\b(?:XCTestCase|[A-Za-z_][A-Za-z0-9_]*TestCase)\b/g;
+  for (const match of content.matchAll(pattern)) classes.add(`${target}/${match[1]}`);
+  return [...classes].sort();
+}
+
+function collectTestMetadata(workspaceRoot) {
+  return [xctestImpactConfig.unitTarget, xctestImpactConfig.uiTarget].flatMap((target) =>
+    walkSwift(workspaceRoot, target)
+      .filter((filePath) => !isTestSupportPath(filePath))
+      .map((filePath) => ({ filePath, identifiers: classIdentifiersForTestFile(workspaceRoot, filePath, target) }))
+      .filter((metadata) => metadata.identifiers.length > 0),
+  );
+}
+
+function matchesAny(filePath, patterns) {
+  return patterns.some((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(filePath);
+  });
+}
+
+function rulesForSourcePath(filePath, includeRetired = false) {
+  return xctestImpactRules.filter(
+    (rule) =>
+      matchesAny(filePath, rule.sourcePatterns) ||
+      (includeRetired && matchesAny(filePath, rule.retiredSourcePatterns ?? [])),
+  );
+}
+
+function addReason(reasons, message) {
+  if (!reasons.includes(message)) reasons.push(message);
+}
+
+function isRemoved(change, filePath, staysInScope) {
+  if (change.status.startsWith('D') && filePath === change.path) return true;
+  return change.status.startsWith('R') && filePath === change.previousPath && !staysInScope(change.path);
+}
+
+function selectRules({ errors, filePath, fullTargets, includeRetired, reasons, removalTarget, selectedIdentifiers, testMetadata }) {
+  const rules = rulesForSourcePath(filePath, includeRetired);
+  if (rules.length === 0) {
+    if (removalTarget) {
+      fullTargets.add(removalTarget);
+      addReason(reasons, `${filePath}: removed unmapped source requires ${removalTarget}`);
+    } else {
+      errors.add(`${filePath}: missing XCTest impact area`);
+    }
+    return;
+  }
+  for (const rule of rules) {
+    const identifiers = testMetadata
+      .filter((metadata) => matchesAny(metadata.filePath, rule.testPatterns))
+      .flatMap((metadata) => metadata.identifiers);
+    if (identifiers.length === 0) {
+      errors.add(`${filePath}: impact area ${rule.name} selects no XCTestCase`);
+      continue;
+    }
+    for (const identifier of identifiers) selectedIdentifiers.add(identifier);
+    addReason(reasons, `${filePath}: selects impact area ${rule.name}`);
+  }
+}
+
+export function buildXCTestImpactDecision(changes, workspaceRoot) {
+  const selectedIdentifiers = new Set();
+  const fullTargets = new Set();
+  const reasons = [];
+  const errors = new Set();
+  const testMetadata = collectTestMetadata(workspaceRoot);
+
+  for (const change of changes) {
+    for (const filePath of changedPaths(change).filter(isProductSource)) {
+      if (change.status.startsWith('C') && filePath === change.previousPath) continue;
+      const removed = isRemoved(change, filePath, isProductSource);
+      selectRules({
+        errors,
+        filePath,
+        fullTargets,
+        includeRetired: removed,
+        reasons,
+        removalTarget: removed ? xctestImpactConfig.unitTarget : null,
+        selectedIdentifiers,
+        testMetadata,
+      });
+    }
+
+    for (const filePath of changedPaths(change)) {
+      const target = targetForTestPath(filePath);
+      if (!target || (change.status.startsWith('C') && filePath === change.previousPath)) continue;
+      if (isTestSupportPath(filePath)) {
+        const removed = isRemoved(change, filePath, (candidate) => targetForTestPath(candidate) === target);
+        selectRules({
+          errors,
+          filePath,
+          fullTargets,
+          includeRetired: removed,
+          reasons,
+          removalTarget: removed ? target : null,
+          selectedIdentifiers,
+          testMetadata,
+        });
+        continue;
+      }
+      if (targetForTestPath(change.path) !== target || !change.exists || change.status.startsWith('D')) {
+        fullTargets.add(target);
+        addReason(reasons, `${filePath}: removed XCTest source requires ${target}`);
+        continue;
+      }
+      const identifiers = classIdentifiersForTestFile(workspaceRoot, change.path, target);
+      if (identifiers.length === 0) {
+        errors.add(`${change.path}: changed XCTest source declares no selectable XCTestCase class`);
+      } else {
+        for (const identifier of identifiers) selectedIdentifiers.add(identifier);
+        addReason(reasons, `${change.path}: selects declared XCTestCase classes`);
+      }
+    }
+  }
+
+  return {
+    errors: [...errors].sort(),
+    fullTargets: [...fullTargets].sort(),
+    reasons,
+    selectedIdentifiers: [...selectedIdentifiers]
+      .filter((identifier) => !fullTargets.has(identifier.split('/')[0]))
+      .sort(),
+  };
+}

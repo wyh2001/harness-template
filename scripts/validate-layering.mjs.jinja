@@ -7,6 +7,8 @@ const workspaceRoot = process.cwd();
 const backendStack = '{{ backend_stack }}';
 const frontendStack = '{{ frontend_stack }}';
 const frontendDir = '{{ frontend_dir | default("") }}';
+const swiftAppStack = '{{ swift_app_stack | default("none") }}';
+const swiftSourceDir = '{{ swift_source_dir | default("Sources") }}';
 const maxNonRustHandWrittenSourceLines = 700;
 const findings = [];
 const featureValidationCache = new Map();
@@ -68,6 +70,8 @@ function isGeneratedOrVendorPath(repoPath) {
     normalized.includes('/obj/') ||
     normalized.includes('/dist/') ||
     normalized.includes('/build/') ||
+    normalized.includes('.xcodeproj/') ||
+    normalized.includes('.xcworkspace/') ||
     normalized.endsWith('.d.ts') ||
     normalized.endsWith('.g.cs') ||
     normalized.endsWith('.designer.cs')
@@ -100,6 +104,9 @@ function validateHandWrittenSourceFileSizes() {
 {% if include_playwright_e2e | default(false) %}
   validateFileSizeForDir(path.join(workspaceRoot, '{{ e2e_test_dir }}'), (candidate) => /\.(tsx?|jsx?)$/.test(candidate));
 {% endif %}
+{% endif %}
+{% if swift_app_stack | default('none') == 'ios' %}
+  validateFileSizeForDir(path.join(workspaceRoot, swiftSourceDir), (candidate) => candidate.endsWith('.swift'));
 {% endif %}
 }
 
@@ -364,6 +371,44 @@ function validateFrontendLayers() {
   }
 }
 
+function validateSwiftLayers() {
+  if (swiftAppStack !== 'ios') return;
+
+  const sourceRoot = path.join(workspaceRoot, swiftSourceDir);
+  const swiftFiles = walkFiles(sourceRoot, (filePath) => filePath.endsWith('.swift'));
+  const persistenceImport = /^import\s+(?:CoreData|SwiftData|RealmSwift)\s*$/m;
+
+  for (const filePath of swiftFiles) {
+    const repoPath = toRepoPath(filePath);
+    if (isGeneratedOrVendorPath(repoPath)) continue;
+    const relativePath = path.relative(sourceRoot, filePath).replaceAll(path.sep, '/');
+    const content = readFile(filePath);
+
+    if (relativePath.startsWith('Domain/')) {
+      if (/^import\s+SwiftUI\s*$/m.test(content)) {
+        addFinding(filePath, 'Swift domain code must not import SwiftUI');
+      }
+      if (persistenceImport.test(content)) {
+        addFinding(filePath, 'Swift domain code must not import concrete persistence frameworks');
+      }
+    }
+
+    if (relativePath.startsWith('Data/') && /^import\s+SwiftUI\s*$/m.test(content)) {
+      addFinding(filePath, 'Swift data/platform adapters must not import SwiftUI');
+    }
+
+    const isPresentationPath =
+      relativePath.startsWith('Features/') || relativePath.startsWith('UIComponents/');
+    const importsSwiftUI = /^import\s+SwiftUI\s*$/m.test(content);
+    if (isPresentationPath && importsSwiftUI && persistenceImport.test(content)) {
+      addFinding(filePath, 'SwiftUI presentation files must use injected repositories instead of persistence frameworks');
+    }
+    if (isPresentationPath && importsSwiftUI && /\bURLSession\.shared\b/.test(content)) {
+      addFinding(filePath, 'SwiftUI presentation files must use an injected client/repository instead of URLSession.shared');
+    }
+  }
+}
+
 if (backendStack === 'rust') {
   validateRustLayers();
 }
@@ -373,6 +418,7 @@ if (backendStack === 'dotnet') {
 }
 
 validateFrontendLayers();
+validateSwiftLayers();
 validateHandWrittenSourceFileSizes();
 
 if (findings.length > 0) {

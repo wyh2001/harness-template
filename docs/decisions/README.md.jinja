@@ -9,4 +9,6 @@ Decisions explain historical rationale. Specs describe the intended current syst
 Current decisions:
 
 - [0001. Adopt Agent-legible Repository Harness](./0001-adopt-agent-legible-repository-harness.md)
-- [0002. Use Generated API Contracts](./0002-use-generated-api-contracts.md)
+- [0002. Use Generated API Contracts](./0002-use-generated-api-contracts.md){% if swift_app_stack | default('none') == 'ios' %}
+- [0003. Use XcodeGen As The Project Source Of Truth](./0003-use-xcodegen-as-project-source.md)
+- [0004. Use One Fixed Local Simulator](./0004-use-one-fixed-local-simulator.md){% endif %}

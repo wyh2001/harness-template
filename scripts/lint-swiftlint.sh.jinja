@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+CONFIG_PATH="${REPO_ROOT}/.swiftlint.yml"
+
+if [[ $# -gt 0 ]]; then
+  printf 'lint-swiftlint.sh does not accept path arguments; configure scope in .swiftlint.yml.\n' >&2
+  exit 2
+fi
+
+if ! command -v swiftlint >/dev/null 2>&1; then
+  printf 'Missing required command: swiftlint. Install it with: brew install swiftlint\n' >&2
+  exit 1
+fi
+
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+  printf 'Missing SwiftLint configuration: %s\n' "${CONFIG_PATH}" >&2
+  exit 1
+fi
+
+cd "${REPO_ROOT}"
+swiftlint lint --config "${CONFIG_PATH}" --strict --quiet
+printf 'SwiftLint semantic checks passed.\n'

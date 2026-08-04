@@ -122,8 +122,36 @@ Frontend components should not call `fetch` directly. Use feature repo/service/r
 ## 3. Frontend Layers
 
 No frontend stack is selected yet. Before adding one, choose its feature folder shape, state/runtime boundary, and DTO/source-of-truth strategy for backend data.
-{% endif %}
-## 4. Generated Contracts
+{% endif %}{% if swift_app_stack | default('none') == 'ios' %}
+## 4. iOS / Swift Layers
+
+Target direction:
+
+```text
+App composition -> Features / view models -> Domain models and protocols <- Data / platform adapters
+```
+
+Suggested shape under `{{ swift_source_dir }}`:
+
+```text
+App/            # composition root and launch coordination
+Domain/         # value models, invariants, repository/provider protocols
+Data/           # persistence, files, network, and platform adapters
+Features/       # SwiftUI screens and view models
+UIComponents/   # reusable presentation components
+```
+
+Rules:
+
+- construct live dependencies in the app composition root and inject protocols into view models.
+- views render state and emit user actions; keep persistence, file operations, and direct networking out of views.
+- UI-published state must use explicit actor isolation appropriate to the deployment target.
+- domain code must not import SwiftUI, persistence frameworks, or concrete data adapters.
+- data adapters may depend inward on domain models/protocols but must not import SwiftUI.
+- platform types in domain models are explicit, documented exceptions rather than permission for framework leakage.
+- keep internal Xcode identifiers stable and separate from localized display names.
+
+{% endif %}{% if swift_app_stack | default('none') != 'ios' %}{{ '\n' }}{% endif %}## {% if swift_app_stack | default('none') == 'ios' %}5{% else %}4{% endif %}. Generated Contracts
 
 {% if include_api_contract | default(false) -%}
 Backend API DTOs are generated into OpenAPI and frontend API types. This is the selected source-of-truth strategy for backend/frontend payloads.
@@ -137,7 +165,7 @@ Frontend feature code should import generated API types instead of copying backe
 {% else -%}
 Generated contracts are not enabled yet. Before backend and frontend integrate, choose exactly one DTO/source-of-truth strategy such as generated OpenAPI types, a shared schema package, typed RPC, or GraphQL codegen. Add both a generation script and a freshness check before feature code depends on that contract.
 {% endif %}
-## 5. Current Enforcement
+## {% if swift_app_stack | default('none') == 'ios' %}6{% else %}5{% endif %}. Current Enforcement
 
 The current validator is intentionally narrow. It should block shortcuts without forcing a broad rewrite before stable feature domains exist.
 
@@ -158,6 +186,12 @@ Enforced now:
 - Frontend UI/runtime files must not import `shared/api` directly.
 - Frontend feature repo/runtime/component files must keep dependency direction predictable.
 {% endif -%}
+{% if swift_app_stack | default('none') == 'ios' -%}
+- Hand-written Swift product source under `{{ swift_source_dir }}` is included in the default 700-line maintainability check.
+- Swift `Domain/` files must not import SwiftUI or persistence frameworks.
+- Swift `Data/` files must not import SwiftUI.
+- SwiftUI view files under `Features/` and `UIComponents/` must not import persistence frameworks or call `URLSession.shared` directly.
+{% endif -%}
 {% if include_api_contract | default(false) -%}
 - Committed backend OpenAPI and frontend API types must match the current backend.
 {% endif %}
@@ -174,17 +208,17 @@ Not enforced yet:
 {% else -%}
 No mechanical layering validator is enabled yet. Add one when a convention becomes repeated and cheap to verify. The first rules to encode should be dependency direction, the default 700-line threshold for hand-written product source files, and its documented exceptions.
 {% endif %}
-## 6. Runtime Feedback Loop
+## {% if swift_app_stack | default('none') == 'ios' %}7{% else %}6{% endif %}. Runtime Feedback Loop
 
 Local runtime checks are separate from `finalize.sh` because they start servers and require free ports.
 
-- `scripts/dev.sh`: starts the configured local stack for manual or agent-driven inspection.
-- `scripts/check-health.sh`: checks an already-running local stack.
-- `scripts/smoke.sh`: starts configured services, checks health/home endpoints, then shuts down only the PIDs it started.
+- `scripts/dev.sh`: starts the configured local stack or opens the generated Xcode project for requested manual inspection.
+- `scripts/check-health.sh`: checks runtime services and, for iOS, verifies the pinned toolchain/simulator contract.
+- `scripts/smoke.sh`: runs the configured startup evidence and cleans up only resources it started.
 
 Run `scripts/smoke.sh` after changes to startup, routing, environment wiring, or cross-service integration.
 
-## 7. How To Extend
+## {% if swift_app_stack | default('none') == 'ios' %}8{% else %}7{% endif %}. How To Extend
 
 When adding a new architectural rule:
 

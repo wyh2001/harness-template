@@ -1,0 +1,93 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDir, '..');
+const projectPath = process.env.HARNESS_XCODE_PROJECT_PATH || path.join(repoRoot, '{{ swift_project_name | default("App") }}.xcodeproj');
+const workspacePath = process.env.HARNESS_XCODE_WORKSPACE_PATH || path.join(repoRoot, '{{ swift_project_name | default("App") }}.xcworkspace');
+const scheme = '{{ swift_project_name | default("App") }}';
+const unitTarget = '{{ swift_unit_test_target | default("AppTests") }}';
+const uiTarget = '{{ swift_ui_test_target | default("AppUITests") }}';
+const destinationEnvironmentVariable = '{{ swift_test_destination_env | default("APP_TEST_DESTINATION") }}';
+const scope = process.argv[2];
+const runnerArguments = process.argv.slice(3);
+const skipUITests = runnerArguments.includes('--skip-ui-tests');
+const selectedIdentifiers = runnerArguments.filter((argument) => argument !== '--skip-ui-tests');
+const supportedScopes = new Set(['unit', 'ui', 'all', 'selected']);
+
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+
+function isValidIdentifier(identifier) {
+  const parts = identifier.split('/');
+  return (
+    (parts.length === 2 || parts.length === 3) &&
+    (parts[0] === unitTarget || parts[0] === uiTarget) &&
+    parts.slice(1).every((part) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(part))
+  );
+}
+
+function fixedSimulatorDestination() {
+  const result = spawnSync(process.execPath, [path.join(scriptDir, 'simulator.mjs'), 'id'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) fail(result.stderr.trim() || result.stdout.trim() || 'Unable to resolve the fixed simulator.');
+  return `platform=iOS Simulator,id=${result.stdout.trim()}`;
+}
+
+if (!supportedScopes.has(scope)) {
+  fail('Usage: ./scripts/test.mjs <unit|ui|all|selected> [--skip-ui-tests] [XCTest target/class[/test] ...]');
+}
+if (runnerArguments.some((argument) => argument.startsWith('-') && argument !== '--skip-ui-tests')) fail('Unknown test-runner option.');
+if (scope !== 'selected' && selectedIdentifiers.length > 0) fail('Only the selected scope accepts XCTest identifiers.');
+if (scope === 'selected' && selectedIdentifiers.length === 0) fail('The selected scope requires at least one XCTest identifier.');
+if (scope === 'selected' && selectedIdentifiers.some((identifier) => !isValidIdentifier(identifier))) {
+  fail(`Selected identifiers must be ${unitTarget} or ${uiTarget} target/class[/test] values.`);
+}
+
+const effectiveIdentifiers = skipUITests
+  ? selectedIdentifiers.filter((identifier) => !identifier.startsWith(`${uiTarget}/`))
+  : selectedIdentifiers;
+if (skipUITests && scope === 'ui') {
+  console.log('UI tests were explicitly skipped.');
+  process.exit(0);
+}
+if (scope === 'selected' && effectiveIdentifiers.length === 0 && skipUITests) {
+  console.log('No XCTest identifiers remain after skipping UI tests.');
+  process.exit(0);
+}
+
+const destination = process.env[destinationEnvironmentVariable] || fixedSimulatorDestination();
+const containerArgs = fs.existsSync(workspacePath)
+  ? ['-workspace', workspacePath]
+  : ['-project', projectPath];
+const args = [
+  'test',
+  ...containerArgs,
+  '-scheme',
+  scheme,
+  '-disableAutomaticPackageResolution',
+  '-destination',
+  destination,
+];
+if (process.env.HARNESS_DERIVED_DATA_PATH) {
+  args.push('-derivedDataPath', process.env.HARNESS_DERIVED_DATA_PATH);
+}
+
+if (scope === 'unit') args.push(`-only-testing:${unitTarget}`);
+if (scope === 'ui') args.push(`-only-testing:${uiTarget}`);
+if (scope === 'all' && skipUITests) args.push(`-only-testing:${unitTarget}`);
+if (scope === 'selected') {
+  for (const identifier of effectiveIdentifiers) args.push(`-only-testing:${identifier}`);
+}
+
+const result = spawnSync('xcodebuild', args, { cwd: repoRoot, stdio: 'inherit' });
+if (result.error) fail(`Unable to start xcodebuild: ${result.error.message}`);
+process.exit(result.status ?? 1);

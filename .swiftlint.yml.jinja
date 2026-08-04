@@ -1,0 +1,19 @@
+# SwiftLint formatting-style rules can overlap or conflict with swift-format.
+# This starter therefore enables only a small semantic rule set. If you expand it into
+# formatting, decide which tool owns formatting and consider disabling swift-format.
+included:
+  - {{ swift_source_dir | default('Sources') }}
+
+only_rules:
+  - blanket_disable_command
+  - duplicate_conditions
+  - duplicated_key_in_dictionary_literal
+  - force_cast
+  - identical_operands
+  - incompatible_concurrency_annotation
+  - invalid_swiftlint_command
+  - notification_center_detachment
+  - private_swiftui_state
+  - unhandled_throwing_task
+  - unowned_variable_capture
+  - weak_delegate

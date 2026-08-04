@@ -5,6 +5,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildDecision, collectE2eSpecMetadata } from './select-playwright-impact-tests.mjs';
+{% if swift_app_stack | default('none') == 'ios' and include_xctest_impact_selection | default(false) %}
+import { buildXCTestImpactDecision } from './select-xctest-impact-tests.mjs';
+{% endif %}
 
 {% set changed_scope_frontend_dir = frontend_dir | default('frontend') -%}
 {% set changed_scope_e2e_test_dir = e2e_test_dir | default(changed_scope_frontend_dir ~ '/e2e') -%}
@@ -12,11 +15,19 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(scriptDir, '..');
 const backendStack = '{{ backend_stack | default("none") }}';
 const frontendStack = '{{ frontend_stack | default("none") }}';
+const swiftAppStack = '{{ swift_app_stack | default("none") }}';
 const frontendDir = '{{ changed_scope_frontend_dir }}';
 const e2eTestDir = '{{ changed_scope_e2e_test_dir }}';
 const includeApiContract = {% if include_api_contract | default(false) %}true{% else %}false{% endif %};
 const includeLayeringValidator = {% if include_layering_validator | default(false) %}true{% else %}false{% endif %};
 const includePlaywrightE2e = {% if include_playwright_e2e | default(false) %}true{% else %}false{% endif %};
+const includeSwiftFormat = {% if include_swift_format | default(true) %}true{% else %}false{% endif %};
+const includeSwiftLint = {% if include_swiftlint | default(false) %}true{% else %}false{% endif %};
+const includeXCTestImpactSelection = {% if include_xctest_impact_selection | default(false) %}true{% else %}false{% endif %};
+const swiftSourceDir = '{{ swift_source_dir | default("Sources") }}';
+const swiftProjectSpecPath = '{{ swift_project_spec_path | default("project.yml") }}';
+const swiftUnitTestTarget = '{{ swift_unit_test_target | default("AppTests") }}';
+const swiftUiTestTarget = '{{ swift_ui_test_target | default("AppUITests") }}';
 const dotnetSolutionPath = '{{ dotnet_solution_path | default("backend/App.slnx") }}';
 const apiContractPath = '{% if backend_stack == "dotnet" %}{{ dotnet_openapi_contract_path | default("") }}{% else %}{{ openapi_contract_path | default("generated/openapi.json") }}{% endif %}';
 const frontendSchemaPath = '{{ frontend_schema_path | default("") }}';
@@ -41,6 +52,7 @@ function parseArgs(argv) {
     json: false,
     since: null,
     skipE2e: false,
+    skipUiTests: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -55,6 +67,10 @@ function parseArgs(argv) {
     }
     if (arg === '--skip-e2e') {
       options.skipE2e = true;
+      continue;
+    }
+    if (arg === '--skip-ui-tests') {
+      options.skipUiTests = true;
       continue;
     }
     if (arg === '--since') {
@@ -80,36 +96,74 @@ function normalizePath(filePath) {
   return filePath.replaceAll(path.sep, '/').replace(/^\.\//, '');
 }
 
-function gitLines(args) {
+function gitOutput(args) {
   const result = spawnSync('git', args, {
     cwd: workspaceRoot,
     encoding: 'utf8',
   });
 
   if (result.status !== 0) {
-    return [];
+    throw new Error(result.stderr.trim() || `git ${args.join(' ')} failed`);
   }
 
-  return result.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  return result.stdout;
 }
 
-function collectChangedFiles(options) {
-  const files =
-    options.explicitFiles.length > 0
-      ? options.explicitFiles
-      : [
-          ...gitLines(['diff', '--name-only', '--diff-filter=ACMRTUXB', options.since ?? 'HEAD', '--']),
-          ...gitLines(['diff', '--name-only', '--cached', '--diff-filter=ACMRTUXB', '--']),
-          ...gitLines(['ls-files', '--others', '--exclude-standard']),
-        ];
+function parseNameStatus(output) {
+  const fields = output.split('\0');
+  const changes = [];
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++];
+    if (!status) continue;
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const previousPath = normalizePath(fields[index++] ?? '');
+      const currentPath = normalizePath(fields[index++] ?? '');
+      if (currentPath) changes.push({ path: currentPath, previousPath, status });
+    } else {
+      const currentPath = normalizePath(fields[index++] ?? '');
+      if (currentPath) changes.push({ path: currentPath, status });
+    }
+  }
+  return changes;
+}
 
-  return [...new Set(files.map(normalizePath))]
-    .filter((filePath) => filePath.length > 0)
-    .filter((filePath) => !filePath.split('/').some((segment) => ignoredPathSegments.has(segment)))
-    .sort();
+function gitHasHead() {
+  return spawnSync('git', ['rev-parse', '--verify', 'HEAD'], {
+    cwd: workspaceRoot,
+    stdio: 'ignore',
+  }).status === 0;
+}
+
+function collectChanges(options) {
+  const trackedChanges = options.since || gitHasHead()
+    ? parseNameStatus(gitOutput(['diff', '--name-status', '-z', '--find-renames', options.since ?? 'HEAD', '--']))
+    : gitOutput(['ls-files', '-z'])
+        .split('\0')
+        .filter(Boolean)
+        .map((filePath) => ({ path: normalizePath(filePath), status: 'A' }));
+  const rawChanges = options.explicitFiles.length > 0
+    ? options.explicitFiles.map((filePath) => ({ path: normalizePath(filePath), status: 'E' }))
+    : [
+        ...trackedChanges,
+        ...gitOutput(['ls-files', '--others', '--exclude-standard', '-z'])
+          .split('\0')
+          .filter(Boolean)
+          .map((filePath) => ({ path: normalizePath(filePath), status: 'A?' })),
+      ];
+
+  const byPath = new Map();
+  for (const change of rawChanges) {
+    if (!change.path || change.path.split('/').some((segment) => ignoredPathSegments.has(segment))) continue;
+    byPath.set(change.path, {
+      ...change,
+      exists: fs.existsSync(path.join(workspaceRoot, change.path)),
+    });
+  }
+  return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function changedFilesFor(changes) {
+  return [...new Set(changes.flatMap((change) => [change.path, change.previousPath]).filter(Boolean))].sort();
 }
 
 function toRepoRelative(fullPath) {
@@ -240,6 +294,44 @@ function isDotnetBackendPath(repoPath) {
   return backendStack === 'dotnet' && (repoPath.startsWith('backend/') || /\.(sln|slnx)$/.test(repoPath));
 }
 
+function isUnderDir(repoPath, directory) {
+  return repoPath === directory || repoPath.startsWith(`${directory}/`);
+}
+
+function isSwiftSourceOrTestPath(repoPath) {
+  return (
+    swiftAppStack === 'ios' &&
+    repoPath.endsWith('.swift') &&
+    (isUnderDir(repoPath, swiftSourceDir) ||
+      isUnderDir(repoPath, swiftUnitTestTarget) ||
+      isUnderDir(repoPath, swiftUiTestTarget))
+  );
+}
+
+function isSwiftUiTestPath(repoPath) {
+  return swiftAppStack === 'ios' && repoPath.endsWith('.swift') && isUnderDir(repoPath, swiftUiTestTarget);
+}
+
+function isSwiftProjectMetadataPath(repoPath) {
+  return (
+    swiftAppStack === 'ios' &&
+    (repoPath === swiftProjectSpecPath ||
+      repoPath === '.swift-format' ||
+      repoPath === '.swiftlint.yml' ||
+      repoPath.endsWith('/Package.resolved'))
+  );
+}
+
+function isXCTestImpactGovernancePath(repoPath) {
+  return [
+    'scripts/xctest-impact-rules.mjs',
+    'scripts/select-xctest-impact-tests.mjs',
+    'scripts/validate-xctest-impact-rules.mjs',
+    'scripts/test.mjs',
+    'docs/tasks/ios-testing.md',
+  ].includes(repoPath);
+}
+
 function isGovernancePath(repoPath) {
   return (
     repoPath === 'AGENTS.md' ||
@@ -280,7 +372,7 @@ function isPlaywrightImpactGovernancePath(repoPath) {
   );
 }
 
-function buildPlan(changedFiles, options) {
+function buildPlan(changedFiles, changes, options) {
   const commands = [];
   const skipped = [];
   const frontendScripts = readPackageScripts(`${frontendDir}/package.json`);
@@ -290,6 +382,11 @@ function buildPlan(changedFiles, options) {
   const frontendConfigChanged = hasAnyChangedFile(changedFiles, isFrontendConfigPath);
   const rustBackendChanged = hasAnyChangedFile(changedFiles, isRustBackendPath);
   const dotnetBackendChanged = hasAnyChangedFile(changedFiles, isDotnetBackendPath);
+  const swiftSourceOrTestChanged = hasAnyChangedFile(changedFiles, isSwiftSourceOrTestPath);
+  const swiftUiTestChanged = hasAnyChangedFile(changedFiles, isSwiftUiTestPath);
+  const swiftProjectMetadataChanged = hasAnyChangedFile(changedFiles, isSwiftProjectMetadataPath);
+  const xctestImpactGovernanceChanged =
+    includeXCTestImpactSelection && hasAnyChangedFile(changedFiles, isXCTestImpactGovernancePath);
   const governanceChanged = hasAnyChangedFile(changedFiles, isGovernancePath);
   const specOrTraceabilityChanged = hasAnyChangedFile(changedFiles, isSpecOrTraceabilityPath);
   const playwrightImpactGovernanceChanged = includePlaywrightE2e && hasAnyChangedFile(changedFiles, isPlaywrightImpactGovernancePath);
@@ -307,6 +404,16 @@ function buildPlan(changedFiles, options) {
   const markdownChanged = hasAnyChangedFile(changedFiles, isMarkdownPath);
   const shellScriptsChanged = changedFiles.filter((repoPath) => repoPath.startsWith('scripts/') && repoPath.endsWith('.sh'));
   const nodeScriptsChanged = changedFiles.filter((repoPath) => repoPath.startsWith('scripts/') && repoPath.endsWith('.mjs'));
+{% if swift_app_stack | default('none') == 'ios' and include_xctest_impact_selection | default(false) %}
+  const xctestImpact = buildXCTestImpactDecision(changes, workspaceRoot);
+  if (xctestImpact.errors.length > 0) {
+    throw new Error(
+      `XCTest impact selection requires maintenance:\n${xctestImpact.errors.map((error) => `- ${error}`).join('\n')}`,
+    );
+  }
+{% else %}
+  const xctestImpact = null;
+{% endif %}
 
   if (frontendChanged || frontendSourceChanged || frontendConfigChanged) {
     addFrontendScriptCommand(
@@ -426,7 +533,77 @@ function buildPlan(changedFiles, options) {
     });
   }
 
-  if (includeLayeringValidator && (rustBackendChanged || dotnetBackendChanged || frontendSourceChanged || layeringRulesChanged) && pathExists('scripts/validate-layering.mjs')) {
+  if (swiftSourceOrTestChanged) {
+    if (includeSwiftFormat) {
+      addCommand(commands, 'swift-format', './scripts/format.sh', ['--lint'], {
+        reason: 'Swift product or XCTest source changed',
+      });
+    }
+    if (includeSwiftLint && pathExists('scripts/lint-swiftlint.sh')) {
+      addCommand(commands, 'swiftlint', './scripts/lint-swiftlint.sh', [], {
+        reason: 'Swift product or XCTest source changed',
+      });
+    }
+  }
+
+  if ((swiftSourceOrTestChanged || xctestImpactGovernanceChanged) && includeXCTestImpactSelection) {
+    addCommand(commands, 'xctest-impact-rules', 'node', ['scripts/validate-xctest-impact-rules.mjs', '--strict'], {
+      reason: swiftSourceOrTestChanged ? 'Swift source changed before focused XCTest selection' : 'XCTest impact governance changed',
+    });
+  }
+
+  if (swiftProjectMetadataChanged) {
+    addCommand(commands, 'xcodegen', 'xcodegen', ['generate', '--spec', swiftProjectSpecPath], {
+      reason: 'XcodeGen spec, Package.resolved, or Swift tool configuration changed',
+    });
+    addCommand(commands, 'test-bundle-build', 'node', ['scripts/build-for-testing.mjs'], {
+      reason: 'Xcode project or package metadata changed',
+    });
+  }
+
+  if (xctestImpact?.fullTargets.includes(swiftUnitTestTarget)) {
+    addCommand(commands, 'swift-unit-tests', './scripts/test.mjs', ['unit'], {
+      reason: xctestImpact.reasons.join('; '),
+    });
+  }
+  const selectedUiIdentifiers =
+    xctestImpact?.selectedIdentifiers.filter((identifier) => identifier.startsWith(`${swiftUiTestTarget}/`)) ?? [];
+  const fullUiTargetSelected = xctestImpact?.fullTargets.includes(swiftUiTestTarget) ?? false;
+  if (options.skipUiTests && (fullUiTargetSelected || selectedUiIdentifiers.length > 0 || swiftUiTestChanged)) {
+    addSkip(
+      skipped,
+      'swift-ui-tests',
+      'explicitly skipped by --skip-ui-tests; run the mapped UI selection when UI evidence is required',
+    );
+  } else if (fullUiTargetSelected) {
+    addCommand(commands, 'swift-ui-tests', './scripts/test.mjs', ['ui'], {
+      reason: xctestImpact.reasons.join('; '),
+    });
+  }
+  if (xctestImpact?.selectedIdentifiers.length > 0) {
+    addCommand(
+      commands,
+      'swift-selected-tests',
+      './scripts/test.mjs',
+      [
+        'selected',
+        ...(options.skipUiTests ? ['--skip-ui-tests'] : []),
+        ...xctestImpact.selectedIdentifiers,
+      ],
+      { reason: xctestImpact.reasons.join('; ') },
+    );
+  } else if (swiftSourceOrTestChanged && !includeXCTestImpactSelection) {
+    addCommand(commands, 'swift-unit-tests', './scripts/test.mjs', ['unit'], {
+      reason: 'Swift changed and focused XCTest impact selection is disabled',
+    });
+    if (swiftUiTestChanged && !options.skipUiTests) {
+      addCommand(commands, 'swift-ui-tests', './scripts/test.mjs', ['ui'], {
+        reason: 'UI XCTest source changed and focused XCTest impact selection is disabled',
+      });
+    }
+  }
+
+  if (includeLayeringValidator && (rustBackendChanged || dotnetBackendChanged || frontendSourceChanged || swiftSourceOrTestChanged || layeringRulesChanged) && pathExists('scripts/validate-layering.mjs')) {
     addCommand(commands, 'architecture-layering', 'node', ['scripts/validate-layering.mjs'], {
       reason: 'source files or layering rules changed',
     });
@@ -493,6 +670,9 @@ function printPlan(changedFiles, plan, options) {
   if (options.skipE2e) {
     console.log('Playwright E2E execution: skipped by --skip-e2e');
   }
+  if (options.skipUiTests) {
+    console.log('iOS UI XCTest execution: skipped by --skip-ui-tests');
+  }
 
   if (changedFiles.length === 0) {
     console.log('No changed files found.');
@@ -540,15 +720,17 @@ function main() {
     options = parseArgs(process.argv.slice(2));
   } catch (error) {
     console.error(error.message);
-    console.error('Supported arguments: --since <git-ref>, --dry-run, --json, --skip-e2e, or explicit file paths');
+    console.error('Supported arguments: --since <git-ref>, --dry-run, --json, --skip-e2e, --skip-ui-tests, or explicit file paths');
     process.exit(1);
   }
 
   let changedFiles;
+  let changes;
   let plan;
   try {
-    changedFiles = collectChangedFiles(options);
-    plan = buildPlan(changedFiles, options);
+    changes = collectChanges(options);
+    changedFiles = changedFilesFor(changes);
+    plan = buildPlan(changedFiles, changes, options);
   } catch (error) {
     console.error(error.message);
     process.exit(1);
@@ -559,6 +741,7 @@ function main() {
       JSON.stringify(
         {
           changedFiles,
+          changes,
           commands: plan.commands.map((command) => ({
             args: command.args,
             command: command.display,
@@ -568,6 +751,7 @@ function main() {
           })),
           dryRun: options.dryRun,
           skipE2e: options.skipE2e,
+          skipUiTests: options.skipUiTests,
           skipped: plan.skipped,
         },
         null,

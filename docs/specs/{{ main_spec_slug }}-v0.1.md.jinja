@@ -67,20 +67,22 @@ Rules that should hold from the first implementation:
 
 - lower layers must not import runtime, UI, transport, persistence, provider SDK, or framework boundary concerns unless that layer owns the boundary.
 - cross-cutting concerns should enter through explicit providers or interfaces.
-- hand-written product source files use 700 lines as the default maintainability threshold; extract a cohesive layer, route, component, or helper before exceeding it.
-{% if backend_stack == 'rust' -%}
-- exception: Rust modules are organized by domain and are exempt from the generic line limit.
-{% endif %}
+- hand-written product source files use 700 lines as the default maintainability threshold; extract a cohesive layer, route, component, or helper before exceeding it.{% if backend_stack == 'rust' %}
+- exception: Rust modules are organized by domain and are exempt from the generic line limit.{% endif %}{% if swift_app_stack | default('none') == 'ios' %}
+- SwiftUI views render state and emit actions; persistence, file I/O, networking, and multi-step workflows belong behind injected protocols and adapters.
+- `{{ swift_project_spec_path }}` owns Xcode project structure, and one explicitly created fixed simulator owns routine local XCTest evidence.{% endif %}
+
 ## 8. Validation Strategy
 
 Use `./scripts/validate-changed-scope.mjs` before marking local implementation work complete. Use `./scripts/finalize.sh` as the check-only CI/pre-merge full gate.
 
-Run `./scripts/smoke.sh` after changes to startup, routing, environment wiring, or cross-service integration.
+Run `./scripts/smoke.sh` after changes to startup, routing, environment wiring, or cross-service integration.{% if frontend_stack != 'none' %}
 
-{% if frontend_stack != 'none' -%}
 Explicitly evaluate Playwright E2E for this frontend. Enable it after the frontend can start reliably and at least one stable user journey exists; otherwise record the deferral reason. See [E2E Testing Task](../tasks/e2e-testing.md).
+{% endif %}{% if swift_app_stack | default('none') == 'ios' %}
 
-{% endif -%}
+Use `./scripts/test.mjs` for XCTest so local and CI destination policy stays centralized. Treat simulator UI tests as deterministic evidence only when fixtures are isolated from developer data. See [iOS Testing Task](../tasks/ios-testing.md).{% endif %}
+
 ## 9. Traceability Matrix
 
 | Requirement ID | Example IDs | Acceptance Criteria IDs | Planned Test Types |
@@ -91,7 +93,7 @@ Explicitly evaluate Playwright E2E for this frontend. Enable it after the fronte
 
 - Routed docs read set: `docs/README.md`, `docs/research/engineering-principles.md`, this spec, and route-specific specs or tasks.
 - Engineering principles IDs: TODO.
-{% if frontend_stack != 'none' -%}
+{% if frontend_stack != 'none' or swift_app_stack | default('none') == 'ios' -%}
 - HCI principle IDs: TODO when frontend or interaction behavior changes.
 {% else -%}
 - HCI principle IDs: Not applicable until a frontend or interaction surface exists.

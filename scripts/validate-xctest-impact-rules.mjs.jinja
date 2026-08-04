@@ -1,0 +1,121 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { xctestImpactConfig, xctestImpactRules } from './xctest-impact-rules.mjs';
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(scriptDir, '..');
+const failures = [];
+
+function parseArgs(argv) {
+  if (argv.length === 0 || (argv.length === 1 && argv[0] === '--strict')) return;
+  throw new Error('Usage: node scripts/validate-xctest-impact-rules.mjs [--strict]');
+}
+
+function walkSwift(relativeDirectory) {
+  const absoluteDirectory = path.join(workspaceRoot, relativeDirectory);
+  if (!fs.existsSync(absoluteDirectory)) return [];
+  return fs.readdirSync(absoluteDirectory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = path.join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) return walkSwift(relativePath);
+    return entry.name.endsWith('.swift') ? [relativePath.replaceAll(path.sep, '/')] : [];
+  });
+}
+
+function declaresXCTestCase(relativePath) {
+  const content = fs.readFileSync(path.join(workspaceRoot, relativePath), 'utf8');
+  return /\b(?:final\s+)?class\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*[^\n{]*\bXCTestCase\b/.test(content);
+}
+
+function matchesAny(filePath, patterns) {
+  return patterns.some((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(filePath);
+  });
+}
+
+try {
+  parseArgs(process.argv.slice(2));
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+
+const productSources = xctestImpactConfig.productRoots.flatMap(walkSwift);
+const resourceSources = xctestImpactConfig.resourcePaths.filter((filePath) =>
+  fs.existsSync(path.join(workspaceRoot, filePath)),
+);
+const testSupportSources = xctestImpactConfig.testSupportRoots.flatMap(walkSwift);
+const testSources = [
+  ...walkSwift(xctestImpactConfig.unitTarget),
+  ...walkSwift(xctestImpactConfig.uiTarget),
+]
+  .filter((filePath) => !testSupportSources.includes(filePath))
+  .filter(declaresXCTestCase);
+const scopeSources = [...productSources, ...resourceSources, ...testSupportSources];
+const ruleNames = new Set();
+
+for (const rule of xctestImpactRules) {
+  if (!rule || typeof rule.name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(rule.name)) {
+    failures.push('XCTest impact-area names must be non-empty kebab-case strings.');
+    continue;
+  }
+  if (ruleNames.has(rule.name)) failures.push(`duplicate XCTest impact area: ${rule.name}`);
+  ruleNames.add(rule.name);
+
+  if (typeof rule.description !== 'string' || rule.description.trim().length === 0) {
+    failures.push(`${rule.name}: description must be non-empty.`);
+  }
+  if (!Array.isArray(rule.sourcePatterns) || rule.sourcePatterns.length === 0) {
+    failures.push(`${rule.name}: sourcePatterns must be non-empty.`);
+  } else if (!rule.sourcePatterns.every((pattern) => pattern instanceof RegExp)) {
+    failures.push(`${rule.name}: sourcePatterns must contain only regular expressions.`);
+  } else {
+    for (const sourcePattern of rule.sourcePatterns) {
+      if (!scopeSources.some((filePath) => matchesAny(filePath, [sourcePattern]))) {
+        failures.push(`${rule.name}: source pattern ${sourcePattern} matches no current product, resource, or test-support source.`);
+      }
+    }
+  }
+  if (
+    rule.retiredSourcePatterns !== undefined &&
+    (!Array.isArray(rule.retiredSourcePatterns) || !rule.retiredSourcePatterns.every((pattern) => pattern instanceof RegExp))
+  ) {
+    failures.push(`${rule.name}: retiredSourcePatterns must contain only regular expressions.`);
+  }
+  if (!Array.isArray(rule.testPatterns) || rule.testPatterns.length === 0) {
+    failures.push(`${rule.name}: testPatterns must be non-empty.`);
+  } else if (!rule.testPatterns.every((pattern) => pattern instanceof RegExp)) {
+    failures.push(`${rule.name}: testPatterns must contain only regular expressions.`);
+  } else {
+    for (const testPattern of rule.testPatterns) {
+      if (!testSources.some((filePath) => matchesAny(filePath, [testPattern]))) {
+        failures.push(`${rule.name}: test pattern ${testPattern} matches no current XCTestCase source.`);
+      }
+    }
+  }
+}
+
+for (const filePath of scopeSources) {
+  if (!xctestImpactRules.some((rule) => matchesAny(filePath, rule.sourcePatterns))) {
+    failures.push(`${filePath}: missing XCTest impact area coverage.`);
+  }
+}
+for (const filePath of testSources) {
+  if (!xctestImpactRules.some((rule) => matchesAny(filePath, rule.testPatterns))) {
+    failures.push(`${filePath}: missing XCTest impact-area test coverage.`);
+  }
+}
+
+if (failures.length > 0) {
+  console.error('XCTest impact-area validation failed:');
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+
+console.log(
+  `XCTest impact areas passed: ${productSources.length} product source file(s), ${testSupportSources.length} test-support file(s).`,
+);

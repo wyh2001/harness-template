@@ -26,8 +26,9 @@ repos; later changes should follow that repo's own docs and constraints.
    `--data` answers when possible.
 4. If the template is not present, create the same initial harness shape
    directly.
-5. Before editing, identify the intended stack, package managers, frontend and
-   backend directories, and CI target.
+5. Before editing, identify the intended stack, package managers, frontend,
+   backend, and Swift source/test directories, Apple platform/XcodeGen choices,
+   and CI target.
 6. Keep `AGENTS.md` short. Put durable guidance in `docs/`; put mechanical
    rules in scripts and CI.
 7. Validate with the smallest available checks, then report what was added,
@@ -134,6 +135,13 @@ Typical checks:
   selection through `./scripts/select-playwright-impact-tests.mjs`, with
   `test:e2e` in `./scripts/finalize.sh` and CI after frontend startup and at least one
   stable journey exist.
+- for iOS/Swift: XcodeGen project generation, recommended-by-default `swift-format`,
+  optional SwiftLint only after its overlapping formatting rules and ownership are
+  resolved, a repository-owned
+  XCTest destination resolver, one explicitly created fixed local simulator,
+  compile-only `build-for-testing` evidence, strict project-owned XCTest impact
+  areas after source/tests exist, and macOS CI with an explicit simulator
+  destination.
 
 `./scripts/validate-changed-scope.mjs` is mandatory before local implementation
 work is marked complete. `./scripts/finalize.sh` must remain check-only and

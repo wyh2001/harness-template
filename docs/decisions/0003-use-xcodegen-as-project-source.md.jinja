@@ -1,0 +1,23 @@
+# 0003. Use XcodeGen As The Project Source Of Truth
+
+Status: Accepted
+
+## Context
+
+Tracked Xcode project internals create noisy diffs and frequent merge conflicts. {{ project_name }} needs a reviewable representation of targets, packages, settings, schemes, and source membership.
+
+## Decision
+
+`{{ swift_project_spec_path | default('project.yml') }}` is the only source of truth for Xcode project structure.
+
+- Change project structure and dependencies in `{{ swift_project_spec_path | default('project.yml') }}`.
+- Run `xcodegen generate --spec {{ swift_project_spec_path | default('project.yml') }}` after changes.
+- Do not hand-edit or commit generated `.xcodeproj` structure.
+- Keep SwiftPM `Package.resolved` tracked for dependency reproducibility.
+- Keep the internal project, target, scheme, module, and product name separate from a localized display name.
+
+## Consequences
+
+- Project generation must succeed before a project-configuration change is complete.
+- A successful build of a stale local `.xcodeproj` is not sufficient evidence.
+- XcodeGen is required locally and in CI.

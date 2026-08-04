@@ -73,6 +73,12 @@ The plan must stay updated while work progresses and be moved to `docs/exec-plan
 {% if frontend_stack != 'none' -%}
 - `{{ frontend_dir }}/` - {% if frontend_stack == 'astro' %}Astro frontend{% else %}Vite frontend{% endif %}.
 {% endif -%}
+{% if swift_app_stack | default('none') == 'ios' -%}
+- `{{ swift_source_dir }}/` - Hand-written Swift product sources.
+- `{{ swift_unit_test_target }}/` - XCTest unit and integration tests.
+- `{{ swift_ui_test_target }}/` - XCTest UI journeys.
+- `{{ swift_project_spec_path }}` - XcodeGen source of truth; generated `.xcodeproj` files are not hand-edited.
+{% endif -%}
 - `docs/` - Product specs, technical specs, decisions, and repeatable tasks.
 - `docs/exec-plans/` - Living execution plans for multi-hour or cross-area work.
 - `docs/research/` - Reusable engineering and HCI principles for routed agent context.
@@ -109,6 +115,40 @@ Run full finalization:
 
 {% if include_layering_validator -%}
 Architecture layering is enforced by `scripts/validate-layering.mjs` as part of changed-scope validation when related files changed and as part of full finalization. Update `docs/specs/architecture-layering-v0.1.md` before changing layer rules.
+
+{% endif -%}
+{% if swift_app_stack | default('none') == 'ios' -%}
+Generate the Xcode project after changing project structure:
+
+```bash
+xcodegen generate --spec {{ swift_project_spec_path }}
+```
+
+`{{ swift_project_spec_path }}` is the only source of truth for targets, packages, settings, schemes, and source membership. Keep SwiftPM `Package.resolved` tracked; never treat a build of a stale generated project as proof that the spec is valid.
+
+Create and inspect the fixed local simulator explicitly:
+
+```bash
+./scripts/simulator.mjs create
+./scripts/simulator.mjs status
+```
+
+Runtime scripts must resolve exactly `{{ swift_simulator_name }}` ({{ swift_simulator_device_name }}, {{ swift_simulator_runtime_name }}). They must not create it implicitly, pick the first available simulator, or commit its UUID. CI supplies `{{ swift_test_destination_env }}` instead.
+
+Run XCTest through the repository-owned destination resolver:
+
+```bash
+./scripts/test.mjs unit
+./scripts/test.mjs ui
+./scripts/test.mjs all
+./scripts/test.mjs selected {{ swift_unit_test_target }}/ExampleTests
+```
+
+{% if include_xctest_impact_selection | default(false) -%}
+Changed-scope validation selects focused XCTest classes through project-owned impact areas in `scripts/xctest-impact-rules.mjs`. Every current Swift product source, configured resource, test-support source, and XCTestCase must remain covered by the strict validator. For routine iteration, `./scripts/validate-changed-scope.mjs --skip-ui-tests` records omitted UI evidence explicitly; run the mapped UI tests when the change needs UI proof.
+
+{% endif -%}
+Report `built`, `test bundle compiled`, and `tests passed` as distinct evidence. `build-for-testing` never counts as executed-test evidence. Read `docs/tasks/ios-testing.md` before changing XCTest infrastructure, simulator policy, UI fixtures, or impact areas.
 
 {% endif -%}
 {% if include_api_contract | default(false) -%}
@@ -163,7 +203,7 @@ Run a temporary startup smoke check:
 ./scripts/smoke.sh
 ```
 
-`smoke.sh` starts the configured local services, checks configured endpoints, and kills only the PIDs it started. Run it after changes to startup, routing, environment wiring, or cross-app integration.
+`smoke.sh` runs configured startup evidence{% if backend_stack != 'none' or frontend_stack != 'none' %}, starts local services, checks configured endpoints, and kills only the PIDs it started{% endif %}. Run it after changes to startup, routing, environment wiring, or cross-app integration.
 
 Governance smoke tests must use minimal fixtures. Do not copy the full repository into a temp directory, and do not copy build outputs, `node_modules`, Rust `target`, Playwright artifacts, or other generated directories unless the test specifically needs them.
 
@@ -231,6 +271,24 @@ pnpm --dir {{ frontend_dir }} format:check
 ```
 
 {% endif -%}
+{% if swift_app_stack | default('none') == 'ios' -%}
+iOS / Swift:
+
+```bash
+xcodegen generate --spec {{ swift_project_spec_path }}
+{% if include_swift_format | default(true) -%}
+./scripts/format.sh
+{% endif -%}
+./scripts/test.mjs unit
+./scripts/test.mjs ui
+./scripts/test.mjs all
+node scripts/build-for-testing.mjs
+{% if include_swiftlint | default(false) -%}
+./scripts/lint-swiftlint.sh
+{% endif -%}
+```
+
+{% endif -%}
 Markdown:
 
 ```bash
@@ -246,6 +304,10 @@ Markdown:
 - Use 700 lines as the default maintainability threshold for hand-written product source files. Treat the threshold as a prompt to extract cohesive components or modules, not to compress code.
 {% if backend_stack == 'rust' -%}
 - Exception: Rust modules are organized by domain, not line count. Do not split a cohesive Rust module solely to satisfy the default threshold; split only at a real domain, ownership, reuse, or readability boundary.
+{% endif -%}
+{% if swift_app_stack | default('none') == 'ios' -%}
+- For SwiftUI, keep views focused on rendering state and emitting actions. Put persistence, file I/O, networking, and multi-step workflows behind injected protocols and adapters.
+- UI-published state should respect actor isolation. Do not hide `Sendable` or main-actor violations with unchecked annotations without a documented ownership proof.
 {% endif -%}
 - Add mechanical checks when a convention becomes important.
 - Treat validation gates as independent constraints: do not weaken, bypass, or rewrite them merely to make the current change pass.

@@ -1,0 +1,23 @@
+# 0004. Use One Fixed Local Simulator
+
+Status: Accepted
+
+## Context
+
+Selecting the first available simulator makes runtime and layout evidence depend on incidental local Xcode state. Automatically creating devices also consumes storage and hides toolchain drift.
+
+## Decision
+
+- Use exactly one local simulator named `{{ swift_simulator_name | default('App-iPhone') }}`.
+- Pin it to {{ swift_simulator_device_name | default('iPhone 17') }} on {{ swift_simulator_runtime_name | default('iOS 26.1') }}.
+- Keep the name, device type, and runtime in `scripts/simulator.mjs` as the machine-readable contract.
+- Create it only through the explicit, idempotent `./scripts/simulator.mjs create` command.
+- Runtime scripts must fail clearly when the exact device is absent or mismatched. They must not create it, select another device, or install a runtime implicitly.
+- Resolve its machine-local UUID at runtime; never commit a simulator UUID.
+- CI supplies an explicit destination through `{{ swift_test_destination_env | default('APP_TEST_DESTINATION') }}` and does not create the persistent local device.
+
+## Consequences
+
+- Local tests use a stable screen size and OS version.
+- Xcode/runtime upgrades require an intentional update to this decision, the Copier answers, and `scripts/simulator.mjs`.
+- Small-screen, accessibility-size, older-runtime, and iPad coverage remain deliberate secondary matrix entries rather than accidental local defaults.

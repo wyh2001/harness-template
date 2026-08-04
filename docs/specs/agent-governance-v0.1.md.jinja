@@ -70,6 +70,18 @@ The repository harness includes:
 {% if include_playwright_e2e | default(false) -%}
 - Playwright E2E user-journey checks through the frontend `test:e2e` script.
 {% endif -%}
+{% if swift_app_stack | default('none') == 'ios' -%}
+- XcodeGen project validation, XCTest, a clean warning-checked iOS build, and fixed-simulator/toolchain health checks.
+{% if include_swift_format | default(true) -%}
+- Recommended `swift-format` formatting checks as the default Swift formatting owner.
+{% endif -%}
+{% if include_swiftlint | default(false) -%}
+- Optional strict SwiftLint checks using a deliberately small semantic rule set. SwiftLint formatting-style rules can overlap or conflict with `swift-format`; choose one formatting owner before expanding this rule set.
+{% endif -%}
+{% if include_xctest_impact_selection | default(false) -%}
+- Strict XCTest impact-area coverage and focused changed-scope XCTest selection.
+{% endif -%}
+{% endif -%}
 - Markdown lint for `AGENTS.md`, README files, and `docs/**/*.md`.
 - Traceability structure validation for specs marked `Traceability: Required` through `scripts/validate-traceability-structure.mjs`.
 {% if include_layering_validator -%}
@@ -81,7 +93,7 @@ The repository harness includes:
 
 Future checks should be added when a rule becomes repeated, easy to forget, or important for agent legibility.
 
-Checks that depend on real application structure should be staged. Decide the desired rule before scaffolding, document it in the relevant spec, then wire the check after the backend/frontend/tooling path exists.
+Checks that depend on real application structure should be staged. Decide the desired rule before scaffolding, document it in the relevant spec, then wire the check after the backend/frontend/Swift/tooling path exists.
 
 Formatting and generation must converge: if a formatter and generator keep changing the same generated file back and forth, exclude that generated path from formatter globs, post-format during generation, or make the generator emit formatter-stable output.
 
@@ -108,6 +120,9 @@ The script selects checks from changed files, including:
 - Playwright E2E subsets selected by impact tags.
 - backend checks only when backend or solution files changed.
 - Rust checks only when Rust workspace files changed.
+{% if swift_app_stack | default('none') == 'ios' -%}
+- Swift layering, project generation/build evidence, mapped XCTest, and the selected formatting/lint gates for affected iOS source or project metadata.
+{% endif -%}
 - docs/governance checks only when docs, agents, scripts, or workflows changed.
 
 ### Full Finalization
@@ -251,15 +266,24 @@ When adding or changing E2E coverage:
 
 Changed frontend source paths that do not match any project impact rule should fall back to full E2E rather than silently skipping browser coverage.
 
-The selector may run tagged subsets locally, but scoped E2E is an iteration accelerator, not proof of full release readiness.
+The selector may run tagged subsets locally, but scoped E2E is an iteration accelerator, not proof of full release readiness.{% if swift_app_stack | default('none') == 'ios' %}
 
-## 12. Smoke And Fixture Policy
+## 12. iOS XCTest And Simulator Policy
+
+- Keep `{{ swift_project_spec_path }}` as the Xcode project source of truth; generated project internals are disposable.
+- Use exactly the pinned local simulator described in `docs/decisions/0004-use-one-fixed-local-simulator.md`, and create it only through the explicit setup command.
+- Route XCTest through `scripts/test.mjs` so local and CI destinations cannot drift across ad hoc commands.
+- Isolate UI-test fixture state from developer persistence, preferences, accounts, files, and network services.
+- Distinguish successful build, compiled test bundle, and executed/passed tests in completion evidence.{% if include_xctest_impact_selection | default(false) %}
+- Keep every current product source, configured non-Swift resource, test-support source, and XCTestCase covered by a project-owned impact area. An unmapped surviving source is a maintenance failure, not permission to skip evidence or silently run a whole target.{% endif %}{% endif %}
+
+## {% if swift_app_stack | default('none') == 'ios' %}13{% else %}12{% endif %}. Smoke And Fixture Policy
 
 Governance smoke tests must use minimal fixtures.
 
 Do not copy the full repository into a temp directory for smoke tests. Do not copy build outputs, `node_modules`, Rust `target`, Playwright artifacts, or other generated directories unless the test specifically needs them.
 
-## 13. Change Discipline
+## {% if swift_app_stack | default('none') == 'ios' %}14{% else %}13{% endif %}. Change Discipline
 
 When changing conventions, scripts, architecture boundaries, generated artifacts, or agent-facing docs:
 

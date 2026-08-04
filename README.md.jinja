@@ -29,4 +29,6 @@ For multi-hour features, major refactors, or cross-area changes, create and main
 
 For non-trivial behavior changes, use `docs/SPEC_TEMPLATE.md` and `docs/TRACEABILITY_GUIDE.md` so requirements, examples, acceptance criteria, code, and tests stay linked.
 
-For that non-trivial workflow, follow `Spec -> Clarifier -> Plan -> Writer -> Critic`. Trivial edits do not require traceability IDs or principle annotations.
+For that non-trivial workflow, follow `Spec -> Clarifier -> Plan -> Writer -> Critic`. Trivial edits do not require traceability IDs or principle annotations.{% if swift_app_stack | default('none') == 'ios' %}
+
+The iOS project is generated from `{{ swift_project_spec_path }}`. Create the pinned local simulator explicitly with `./scripts/simulator.mjs create`, run XCTest through `./scripts/test.mjs`, and read `docs/tasks/ios-testing.md` before changing simulator, UI-test fixture, or impact-selection policy.{% endif %}

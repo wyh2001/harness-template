@@ -8,6 +8,50 @@ API_BASE_URL="${API_BASE_URL:-http://{{ api_host }}:{{ api_port }}}"
 FRONTEND_BASE_URL="${FRONTEND_BASE_URL:-http://{{ frontend_host }}:{{ frontend_port }}}"
 {% endif %}
 
+{% if swift_app_stack | default('none') == 'ios' -%}
+required_commands=(xcodegen xcodebuild xcrun node)
+for command_name in "${required_commands[@]}"; do
+  if ! command -v "${command_name}" >/dev/null 2>&1; then
+    printf 'Missing required command: %s\n' "${command_name}" >&2
+    exit 1
+  fi
+done
+
+{% if include_swift_format | default(true) -%}
+if ! command -v swift-format >/dev/null 2>&1 && ! xcrun --find swift-format >/dev/null 2>&1; then
+  printf 'Missing required command: swift-format\n' >&2
+  exit 1
+fi
+{% endif %}
+
+required_paths=("{{ swift_project_spec_path }}" scripts/finalize.sh scripts/simulator.mjs docs/README.md AGENTS.md)
+{% if include_swift_format | default(true) -%}
+required_paths+=(.swift-format)
+{% endif -%}
+{% if include_swiftlint | default(false) -%}
+required_paths+=(.swiftlint.yml scripts/lint-swiftlint.sh)
+{% endif -%}
+for required_path in "${required_paths[@]}"; do
+  if [[ ! -e "${required_path}" ]]; then
+    printf 'Missing required path: %s\n' "${required_path}" >&2
+    exit 1
+  fi
+done
+
+printf 'Xcode: %s\n' "$(xcodebuild -version | head -n 1)"
+printf 'XcodeGen: %s\n' "$(xcodegen --version)"
+printf 'Node: %s\n' "$(node --version)"
+{% if include_swift_format | default(true) -%}
+printf 'Swift format: enabled (recommended formatting owner)\n'
+{% else -%}
+printf 'Swift format: disabled; keep one explicit formatting owner in project governance.\n'
+{% endif -%}
+{% if include_swiftlint | default(false) -%}
+printf 'SwiftLint: enabled; review formatting-style rules before combining them with another formatter.\n'
+{% endif -%}
+node scripts/simulator.mjs status
+
+{% endif -%}
 check_url() {
   local label="$1"
   local url="$2"
@@ -28,4 +72,4 @@ check_url "API health" "${API_BASE_URL}{{ api_health_path }}" "{{ api_health_tex
 check_url "Frontend home" "${FRONTEND_BASE_URL}/" "{{ frontend_health_text }}"
 {% endif %}
 
-printf 'Runtime health checks passed.\n'
+printf 'Repository and runtime health checks passed.\n'

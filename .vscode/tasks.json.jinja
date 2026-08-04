@@ -1,8 +1,48 @@
 {
   "version": "2.0.0",
   "tasks": [
+{% if swift_app_stack | default('none') == 'ios' %}
     {
-      "label": "dev: start full stack",
+      "label": "xcode: generate",
+      "type": "shell",
+      "command": "xcodegen generate --spec {{ swift_project_spec_path }}",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "simulator: create fixed device",
+      "type": "shell",
+      "command": "./scripts/simulator.mjs create",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "test: unit",
+      "type": "shell",
+      "command": "./scripts/test.mjs unit",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "test: ui",
+      "type": "shell",
+      "command": "./scripts/test.mjs ui",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": "test"
+    },
+{% endif %}
+    {
+      "label": "dev: {% if swift_app_stack | default('none') == 'ios' and backend_stack == 'none' and frontend_stack == 'none' %}open Xcode{% else %}start full stack{% endif %}",
       "type": "shell",
       "command": "./scripts/dev.sh",
       "options": {

@@ -15,7 +15,7 @@ Always read this base set first:
 3. The most relevant file under `docs/specs`
 4. The relevant file under `docs/status` when available
 
-For frontend or interaction scope, always add:
+For frontend, iOS UI, or interaction scope, always add:
 
 1. `docs/research/hci-principles.md`
 
@@ -38,10 +38,8 @@ Use when changing current behavior, adding requirements, or deciding acceptance 
 Read route-specific docs:
 
 1. `docs/specs/architecture-layering-v0.1.md`
-2. `docs/tasks/scaffold-planning.md`
-{% if include_api_contract | default(false) -%}
-3. `docs/tasks/schema-generation.md`
-{% endif %}
+2. `docs/tasks/scaffold-planning.md`{% if include_api_contract | default(false) %}
+3. `docs/tasks/schema-generation.md`{% endif %}
 Use when scaffolding code, changing dependency direction, or changing backend/frontend payload contracts.
 
 ### C) Frontend, HCI, Or Interaction Work
@@ -49,11 +47,12 @@ Use when scaffolding code, changing dependency direction, or changing backend/fr
 Read route-specific docs:
 
 1. `docs/research/hci-principles.md`
-2. `docs/specs/architecture-layering-v0.1.md`
-{% if frontend_stack != 'none' -%}
+2. `docs/specs/architecture-layering-v0.1.md`{% if frontend_stack != 'none' %}
 3. `docs/tasks/e2e-testing.md`
-4. `docs/specs/playwright-e2e-impact-tags.md`
-{% endif %}
+4. `docs/specs/playwright-e2e-impact-tags.md`{% endif %}{% if swift_app_stack | default('none') == 'ios' %}
+3. `docs/tasks/ios-testing.md`
+4. `docs/decisions/0003-use-xcodegen-as-project-source.md`
+5. `docs/decisions/0004-use-one-fixed-local-simulator.md`{% endif %}
 Use when changing user-facing flows, controls, layout, browser behavior, or frontend runtime boundaries.
 
 ### D) Validation, Governance, Or Agent-Facing Docs
@@ -127,14 +126,15 @@ assumptions, normalized open questions, and a planner handoff note.
 
 - [{{ main_spec_title }}](./specs/{{ main_spec_slug }}-v0.1.md) - Product scope and intended current behavior.
 - [Architecture Layering v0.1](./specs/architecture-layering-v0.1.md) - Layer ownership, dependency direction, and enforcement progress.
-- [Agent Governance v0.1](./specs/agent-governance-v0.1.md) - Repository harness, comment policy, generated artifacts, and validation principles.
-{% if frontend_stack != 'none' -%}
-- [Playwright E2E Impact Tags](./specs/playwright-e2e-impact-tags.md) - Impact-tag rule, validator, and selector contract for scoped local E2E checks.
-{% endif %}
+- [Agent Governance v0.1](./specs/agent-governance-v0.1.md) - Repository harness, comment policy, generated artifacts, and validation principles.{% if frontend_stack != 'none' %}
+- [Playwright E2E Impact Tags](./specs/playwright-e2e-impact-tags.md) - Impact-tag rule, validator, and selector contract for scoped local E2E checks.{% endif %}
+
 ## Decisions
 
 - [0001. Adopt Agent-legible Repository Harness](./decisions/0001-adopt-agent-legible-repository-harness.md)
-- [0002. Use Generated API Contracts](./decisions/0002-use-generated-api-contracts.md)
+- [0002. Use Generated API Contracts](./decisions/0002-use-generated-api-contracts.md){% if swift_app_stack | default('none') == 'ios' %}
+- [0003. Use XcodeGen As The Project Source Of Truth](./decisions/0003-use-xcodegen-as-project-source.md)
+- [0004. Use One Fixed Local Simulator](./decisions/0004-use-one-fixed-local-simulator.md){% endif %}
 
 ## Tasks
 
@@ -142,7 +142,8 @@ assumptions, normalized open questions, and a planner handoff note.
 - [Alignment Check Task](./tasks/alignment-check.md) - Checklist for detecting and fixing drift between docs, generated contracts, decisions, code, and checks.
 - [Scaffold Planning Task](./tasks/scaffold-planning.md) - Checklist for deciding layers, DTO ownership, and staged checks before asking an agent to scaffold code.
 - [Schema Generation Task](./tasks/schema-generation.md) - Workflow for regenerating OpenAPI and frontend API types.
-- [E2E Testing Task](./tasks/e2e-testing.md) - Workflow for introducing and maintaining Playwright user-journey tests.
+- [E2E Testing Task](./tasks/e2e-testing.md) - Workflow for introducing and maintaining Playwright user-journey tests.{% if swift_app_stack | default('none') == 'ios' %}
+- [iOS Testing Task](./tasks/ios-testing.md) - Fixed-simulator, XcodeGen, XCTest, UI-fixture, and changed-scope impact guidance.{% endif %}
 
 ## Research
 
